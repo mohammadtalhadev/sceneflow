@@ -8,7 +8,8 @@ import {
   Coffee, 
   Palette,
   Edit2,
-  PanelRight
+  PanelRight,
+  PanelRightClose
 } from 'lucide-react';
 import { COLORS } from '../constants/script';
 import { EXTERNAL_LINKS } from '../constants/links';
@@ -35,6 +36,7 @@ interface ScriptHeaderControlsProps {
   activeCueStatus?: 'drafting' | 'editing' | 'idle';
   isInspectorOpen?: boolean;
   onToggleInspector?: () => void;
+  onToggleScriptVisibility?: () => void;
 }
 
 export const ScriptHeaderControls: React.FC<ScriptHeaderControlsProps> = memo(({
@@ -54,6 +56,7 @@ export const ScriptHeaderControls: React.FC<ScriptHeaderControlsProps> = memo(({
   activeCueStatus,
   isInspectorOpen = true,
   onToggleInspector,
+  onToggleScriptVisibility,
 }) => {
   const autoScrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -191,6 +194,18 @@ export const ScriptHeaderControls: React.FC<ScriptHeaderControlsProps> = memo(({
                 </div>
               )}
             </div>
+            {onToggleScriptVisibility && (
+              <button
+                type="button"
+                onClick={onToggleScriptVisibility}
+                title="Hide Script Preview (Cinema Full Width) [Shift+P]"
+                aria-label="Hide Script Preview"
+                className="hidden lg:flex items-center gap-1 px-2 py-1 bg-surface-muted hover:bg-surface-hover border border-border-main text-text-muted hover:text-text-main rounded-lg text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-2xs select-none shrink-0"
+              >
+                <PanelRightClose size={11} className="shrink-0 text-text-faint" />
+                <span className="script-btn-label">Hide</span>
+              </button>
+            )}
             {setIsColorModalOpen && (
               <button 
                 onClick={() => setIsColorModalOpen(true)}

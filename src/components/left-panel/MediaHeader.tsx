@@ -1,5 +1,5 @@
 import React, { memo, useRef } from 'react';
-import { Video, VideoOff, Play, Pause, RotateCcw, Plus, Edit2, Film, FolderOpen } from 'lucide-react';
+import { Video, VideoOff, Play, Pause, RotateCcw, Plus, Edit2, Film, FolderOpen, FileText } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { UI_TOKENS } from '../../styles/tokens/ui';
 import { LiveTimecodeBadge } from '../edit/LiveTimecodeBadge';
@@ -23,6 +23,8 @@ export interface MediaHeaderProps {
   onToggleVideoCollapsed?: () => void;
   currentTime: number;
   duration: number;
+  isFullWidthMode?: boolean;
+  onRestoreScript?: () => void;
 }
 
 export const MediaHeader: React.FC<MediaHeaderProps> = memo(({
@@ -43,6 +45,8 @@ export const MediaHeader: React.FC<MediaHeaderProps> = memo(({
   onToggleVideoCollapsed,
   currentTime,
   duration,
+  isFullWidthMode = false,
+  onRestoreScript,
 }) => {
   const localFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -260,6 +264,22 @@ export const MediaHeader: React.FC<MediaHeaderProps> = memo(({
               </>
             )}
           </button>
+        )}
+
+        {/* Full-Width Cinema Restore Script Button */}
+        {isFullWidthMode && onRestoreScript && (
+          <>
+            <div className="w-px h-3.5 bg-border-subtle mx-0.5 hidden sm:block" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={onRestoreScript}
+              title="Show Script Preview [Shift+P]"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-150 border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 shadow-xs active:scale-95 select-none shrink-0"
+            >
+              <FileText size={11} className="shrink-0 text-blue-500" />
+              <span className="media-btn-label">Show Script</span>
+            </button>
+          </>
         )}
       </div>
     </div>

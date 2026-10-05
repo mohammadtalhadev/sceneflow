@@ -14,6 +14,7 @@ interface UseKeyboardShortcutsOptions {
   onOpenRawCues?: () => void;
   onOpenLibrary?: () => void;
   onToggleCopilot?: () => void;
+  onToggleScript?: () => void;
   disabled?: boolean;
 }
 
@@ -31,6 +32,7 @@ export function useKeyboardShortcuts({
   onOpenRawCues,
   onOpenLibrary,
   onToggleCopilot,
+  onToggleScript,
   disabled = false,
 }: UseKeyboardShortcutsOptions) {
   const [isDesktop, setIsDesktop] = useState(
@@ -113,6 +115,11 @@ export function useKeyboardShortcuts({
         if ((e.code === 'KeyA' || e.key.toLowerCase() === 'a') && onToggleCopilot) {
           e.preventDefault();
           onToggleCopilot();
+          return;
+        }
+        if ((e.code === 'KeyP' || e.key.toLowerCase() === 'p') && onToggleScript) {
+          e.preventDefault();
+          onToggleScript();
           return;
         }
       }

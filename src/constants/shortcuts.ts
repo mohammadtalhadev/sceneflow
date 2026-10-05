@@ -174,12 +174,23 @@ export const SHORTCUTS_REGISTRY: ShortcutItem[] = [
     id: 'copilot.toggle',
     category: 'studio',
     label: 'AI Director Copilot',
-    description: 'Toggle AI Director Copilot assistant panel (Seedance 2.5 filmmaking)',
+    description: 'Toggle AI Director Copilot assistant panel (Cinema Virtual Production)',
     keys: {
       win: ['Shift', 'A'],
       mac: ['Shift', 'A'],
     },
     aliases: ['Ctrl+I'],
+    context: 'Global',
+  },
+  {
+    id: 'script.togglePreview',
+    category: 'studio',
+    label: 'Toggle Script Preview',
+    description: 'Toggle Script Preview visibility to switch between split view and full-width playback',
+    keys: {
+      win: ['Shift', 'P'],
+      mac: ['Shift', 'P'],
+    },
     context: 'Global',
   },
 

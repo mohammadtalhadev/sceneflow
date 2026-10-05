@@ -3,7 +3,8 @@ import {
   Book, 
   Coffee, 
   Info,
-  Sparkles
+  Sparkles,
+  FileText
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { UI_TOKENS } from '../styles/tokens/ui';
@@ -26,6 +27,8 @@ export interface AppHeaderProps {
   setIsLibraryOpen: (open: boolean) => void;
   isCopilotOpen?: boolean;
   onToggleCopilot?: () => void;
+  isScriptVisible?: boolean;
+  onToggleScriptVisibility?: () => void;
   onNewProject?: () => void;
   onOpenGuide?: () => void;
   isColorModalOpen: boolean;
@@ -67,6 +70,8 @@ export const AppHeader: React.FC<AppHeaderProps> = memo(({
   setIsLibraryOpen,
   isCopilotOpen = false,
   onToggleCopilot,
+  isScriptVisible = true,
+  onToggleScriptVisibility,
   onNewProject,
   onOpenGuide,
   isColorModalOpen,
@@ -209,6 +214,29 @@ export const AppHeader: React.FC<AppHeaderProps> = memo(({
           <span>Tip</span>
         </a>
 
+        {/* Screenplay / Script Preview Toggle Button */}
+        {onToggleScriptVisibility && (
+          <button
+            type="button"
+            onClick={onToggleScriptVisibility}
+            title={isScriptVisible ? "Hide Script Preview (Cinema Full Width) [Shift+P]" : "Show Script Preview [Shift+P]"}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-150 border select-none active:scale-95 shrink-0",
+              isScriptVisible
+                ? "bg-surface text-text-main border-border-main hover:bg-surface-subtle shadow-2xs"
+                : "bg-surface/50 text-text-muted hover:text-text-main border-border-subtle hover:border-border-main"
+            )}
+          >
+            <FileText size={12} className={cn("shrink-0", isScriptVisible ? "text-blue-500" : "text-text-faint")} />
+            <span>Script</span>
+            {!isScriptVisible && (
+              <span className="text-[8px] px-1 py-0.2 rounded font-mono bg-blue-500/10 text-blue-500 font-bold">
+                OFF
+              </span>
+            )}
+          </button>
+        )}
+
         {/* AI Director Copilot Button */}
         {onToggleCopilot && (
           <button
@@ -246,6 +274,8 @@ export const AppHeader: React.FC<AppHeaderProps> = memo(({
           applyScrollFocus={applyScrollFocus}
           isPreferencesCustomized={isPreferencesCustomized}
           onResetAll={onResetAll}
+          isScriptVisible={isScriptVisible}
+          onToggleScriptVisibility={onToggleScriptVisibility}
         />
 
         {/* Standalone Info Button */}

@@ -87,6 +87,20 @@ export default function App() {
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [isScriptVisible, setIsScriptVisible] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('sceneflow_script_preview_visible');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  // When Copilot is open in side view, Script Preview is hidden so Copilot docks cleanly beside Playback.
+  // When Copilot is closed, Script Preview visibility follows isScriptVisible.
+  const isEffectiveScriptVisible = isScriptVisible && !isCopilotOpen;
+  const isFullWidthPlayback = !isEffectiveScriptVisible && !isCopilotOpen;
+
   const [activeHeaderMenu, setActiveHeaderMenu] = useState<HeaderMenuId | null>(null);
   const [rawCuesText, setRawCuesText] = useState("");
 
@@ -355,8 +369,30 @@ export default function App() {
     overlapPicker.isOpen
   );
 
+  const handleToggleScriptVisible = useCallback(() => {
+    setIsScriptVisible(prev => {
+      // If Copilot is currently open, clicking Script brings back Script and closes Copilot
+      if (isCopilotOpen) {
+        setIsCopilotOpen(false);
+        try {
+          localStorage.setItem('sceneflow_script_preview_visible', 'true');
+        } catch {}
+        return true;
+      }
+      const next = !prev;
+      try {
+        localStorage.setItem('sceneflow_script_preview_visible', String(next));
+      } catch {}
+      return next;
+    });
+  }, [isCopilotOpen]);
+
   const handleResetView = useCallback(() => {
     resetViewLayout(mode);
+    setIsScriptVisible(true);
+    try {
+      localStorage.setItem('sceneflow_script_preview_visible', 'true');
+    } catch {}
     if (mode === 'edit') {
       setIsInspectorOpen(true);
     }
@@ -380,6 +416,7 @@ export default function App() {
     onOpenRawCues: () => handleOpenRawCuesModal(),
     onOpenLibrary: () => setIsLibraryOpen(true),
     onToggleCopilot: () => setIsCopilotOpen(prev => !prev),
+    onToggleScript: handleToggleScriptVisible,
     disabled: isAnyModalOpen,
   });
 
@@ -450,7 +487,7 @@ export default function App() {
     }
   }, [mode, isDesktop]);
 
-  const isEffectiveViewCustomized = isViewCustomized || (mode === 'edit' && !isInspectorOpen);
+  const isEffectiveViewCustomized = isViewCustomized || (mode === 'edit' && !isInspectorOpen) || !isScriptVisible;
 
   const isPreferencesCustomized = 
     themeMode !== 'auto' ||
@@ -848,10 +885,14 @@ export default function App() {
   const leftPanelStyle = useMemo(
     () => {
       if (!isDesktop) return undefined;
+      // When Script Preview is hidden, left panel expands to full width or fills all space next to Copilot
+      if (!isEffectiveScriptVisible) {
+        return { flex: '1 1 0%', minWidth: 0, width: '100%' };
+      }
       const ratio = mode === 'edit' ? editSplitRatio : splitRatio;
       return { width: `${ratio}%` };
     },
-    [isDesktop, mode, editSplitRatio, splitRatio]
+    [isDesktop, isEffectiveScriptVisible, mode, editSplitRatio, splitRatio]
   );
 
   const rightPanelStyle = useMemo(
@@ -873,6 +914,8 @@ export default function App() {
         setIsLibraryOpen={setIsLibraryOpen}
         isCopilotOpen={isCopilotOpen}
         onToggleCopilot={() => setIsCopilotOpen(prev => !prev)}
+        isScriptVisible={isEffectiveScriptVisible}
+        onToggleScriptVisibility={handleToggleScriptVisible}
         onNewProject={handleNewProject}
         onOpenGuide={handleOpenGuide}
         isColorModalOpen={isColorModalOpen}
@@ -960,10 +1003,16 @@ export default function App() {
           isAligning={isAligning}
           alignSuccess={alignSuccess}
           style={leftPanelStyle}
+          className={cn(
+            isFullWidthPlayback && "!border-r-0 lg:!border-r-0 w-full flex-1",
+            isCopilotOpen && "flex-1 min-w-0"
+          )}
+          isFullWidthMode={isFullWidthPlayback}
+          onRestoreScript={handleToggleScriptVisible}
         />
 
-        {/* Desktop Resizable Split Pane Divider */}
-        {isDesktop && (
+        {/* Desktop Resizable Split Pane Divider (Only when Script Preview is visible) */}
+        {isDesktop && isEffectiveScriptVisible && (
           <SplitPaneDivider
             splitRatio={mode === 'edit' ? editSplitRatio : splitRatio}
             onSplitChange={mode === 'edit' ? setEditSplitRatio : setSplitRatio}
@@ -974,68 +1023,71 @@ export default function App() {
           />
         )}
 
-        {/* Center Panel: The Screenplay */}
-        <div 
-          style={mode === 'playback' ? rightPanelStyle : undefined}
-          className={cn(
-            UI_TOKENS.layout.rightPanelBase,
-            isScriptPureBlack && "!bg-black",
-            mode === 'edit' ? "hidden lg:flex flex-1 min-w-0 h-full" : "w-full flex-1"
-          )}
-        >
-          <ScriptHeaderControls
-            mode={mode}
-            isAutoScrollEnabled={isAutoScrollEnabled}
-            setIsAutoScrollEnabled={setIsAutoScrollEnabled}
-            isAutoScrollDropdownOpen={isAutoScrollDropdownOpen}
-            setIsAutoScrollDropdownOpen={setIsAutoScrollDropdownOpen}
-            autoScrollTargets={autoScrollTargets}
-            setAutoScrollTargets={setAutoScrollTargets}
-            setIsLibraryOpen={setIsLibraryOpen}
-            setIsColorModalOpen={setIsColorModalOpen}
-            scriptThemeId={scriptThemeId}
-            cuePaletteProfile={cuePaletteProfile}
-            lineCount={processedLines.length}
-            onOpenRawScriptModal={handleOpenRawScriptModal}
-            activeCueStatus={!selection ? 'idle' : (newCue.id ? 'editing' : 'drafting')}
-            isInspectorOpen={isInspectorOpen}
-            onToggleInspector={() => setIsInspectorOpen(prev => !prev)}
-          />
-
+        {/* Center Panel: The Screenplay (Hidden when Copilot is open or when toggled hidden) */}
+        {isEffectiveScriptVisible && (
           <div 
-            ref={scriptRef}
-            onMouseDown={handleScriptMouseDown}
-            onClick={handleScriptClick}
-            onMouseUp={handleScriptMouseUp}
+            style={mode === 'playback' ? rightPanelStyle : undefined}
             className={cn(
-              "flex-1 overflow-y-auto font-serif text-[14px] leading-snug scrollbar-hide",
-              isScriptPureBlack && "bg-black",
-              mode === 'edit' ? "p-2 md:p-4" : "p-4 lg:p-10"
+              UI_TOKENS.layout.rightPanelBase,
+              isScriptPureBlack && "!bg-black",
+              mode === 'edit' ? "hidden lg:flex flex-1 min-w-0 h-full" : "w-full flex-1"
             )}
           >
-            <div className={cn(
-              "script-paper-container mx-auto min-h-full rounded-sm relative",
-              isScriptPureBlack ? "!bg-black !shadow-none" : cn(activeTheme.paperBg, activeTheme.paperShadow),
-              activeTheme.paperBorder,
-              activeTheme.textColor,
-              getScriptWidthPreset(scriptWidthPreset).widthClass,
-              mode === 'edit' ? "p-6 md:p-8" : "p-8 lg:p-12"
-            )}>
-              {/* Page punch holes effect */}
-              {!isScriptPureBlack && (
-                <div className="script-punch-hole absolute left-2 top-12 flex flex-col gap-8 opacity-20">
-                  <div className={cn("w-2 h-2 rounded-full shadow-inner", activeTheme.punchHoleBg)} />
-                  <div className={cn("w-2 h-2 rounded-full shadow-inner", activeTheme.punchHoleBg)} />
-                  <div className={cn("w-2 h-2 rounded-full shadow-inner", activeTheme.punchHoleBg)} />
-                </div>
+            <ScriptHeaderControls
+              mode={mode}
+              isAutoScrollEnabled={isAutoScrollEnabled}
+              setIsAutoScrollEnabled={setIsAutoScrollEnabled}
+              isAutoScrollDropdownOpen={isAutoScrollDropdownOpen}
+              setIsAutoScrollDropdownOpen={setIsAutoScrollDropdownOpen}
+              autoScrollTargets={autoScrollTargets}
+              setAutoScrollTargets={setAutoScrollTargets}
+              setIsLibraryOpen={setIsLibraryOpen}
+              setIsColorModalOpen={setIsColorModalOpen}
+              scriptThemeId={scriptThemeId}
+              cuePaletteProfile={cuePaletteProfile}
+              lineCount={processedLines.length}
+              onOpenRawScriptModal={handleOpenRawScriptModal}
+              activeCueStatus={!selection ? 'idle' : (newCue.id ? 'editing' : 'drafting')}
+              isInspectorOpen={isInspectorOpen}
+              onToggleInspector={() => setIsInspectorOpen(prev => !prev)}
+              onToggleScriptVisibility={handleToggleScriptVisible}
+            />
+
+            <div 
+              ref={scriptRef}
+              onMouseDown={handleScriptMouseDown}
+              onClick={handleScriptClick}
+              onMouseUp={handleScriptMouseUp}
+              className={cn(
+                "flex-1 overflow-y-auto font-serif text-[14px] leading-snug scrollbar-hide",
+                isScriptPureBlack && "bg-black",
+                mode === 'edit' ? "p-2 md:p-4" : "p-4 lg:p-10"
               )}
-              
-              <div className="relative z-10" style={{ paddingBottom: mode === 'playback' ? '70vh' : '0' }}>
-                {renderedScript}
+            >
+              <div className={cn(
+                "script-paper-container mx-auto min-h-full rounded-sm relative",
+                isScriptPureBlack ? "!bg-black !shadow-none" : cn(activeTheme.paperBg, activeTheme.paperShadow),
+                activeTheme.paperBorder,
+                activeTheme.textColor,
+                getScriptWidthPreset(scriptWidthPreset).widthClass,
+                mode === 'edit' ? "p-6 md:p-8" : "p-8 lg:p-12"
+              )}>
+                {/* Page punch holes effect */}
+                {!isScriptPureBlack && (
+                  <div className="script-punch-hole absolute left-2 top-12 flex flex-col gap-8 opacity-20">
+                    <div className={cn("w-2 h-2 rounded-full shadow-inner", activeTheme.punchHoleBg)} />
+                    <div className={cn("w-2 h-2 rounded-full shadow-inner", activeTheme.punchHoleBg)} />
+                    <div className={cn("w-2 h-2 rounded-full shadow-inner", activeTheme.punchHoleBg)} />
+                  </div>
+                )}
+                
+                <div className="relative z-10" style={{ paddingBottom: mode === 'playback' ? '70vh' : '0' }}>
+                  {renderedScript}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Right Panel: Dedicated Cue Inspector in Edit Mode (Desktop Only) */}
         {mode === 'edit' && isDesktop && isInspectorOpen && (
@@ -1068,6 +1120,7 @@ export default function App() {
           cues={state.cues || []}
           onApplyCues={handleApplyCopilotCues}
           onApplyScript={handleApplyCopilotScript}
+          onSwitchToScript={handleToggleScriptVisible}
         />
       </main>
     </CueEditorProvider>

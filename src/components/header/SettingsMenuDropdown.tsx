@@ -9,7 +9,8 @@ import {
   Palette, 
   Clock, 
   RotateCcw,
-  Keyboard
+  Keyboard,
+  FileText
 } from 'lucide-react';
 import { UI_TOKENS } from '../../styles/tokens/ui';
 import { cn } from '../../lib/utils';
@@ -44,6 +45,8 @@ export interface SettingsMenuDropdownProps {
   applyScrollFocus?: (preset: ScrollFocusPresetId) => void;
   isPreferencesCustomized?: boolean;
   onResetAll?: () => void;
+  isScriptVisible?: boolean;
+  onToggleScriptVisibility?: () => void;
 }
 
 export const SettingsMenuDropdown: React.FC<SettingsMenuDropdownProps> = memo(({
@@ -64,6 +67,8 @@ export const SettingsMenuDropdown: React.FC<SettingsMenuDropdownProps> = memo(({
   applyScrollFocus,
   isPreferencesCustomized = false,
   onResetAll,
+  isScriptVisible = true,
+  onToggleScriptVisibility,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -334,6 +339,32 @@ export const SettingsMenuDropdown: React.FC<SettingsMenuDropdownProps> = memo(({
                     </span>
                   )}
                   <kbd className={UI_TOKENS.badge.shortcut}>Shift+R</kbd>
+                </div>
+              </button>
+            )}
+
+            {onToggleScriptVisibility && (
+              <button
+                role="menuitem"
+                onClick={() => {
+                  onClose();
+                  onToggleScriptVisibility();
+                }}
+                className={UI_TOKENS.dropdown.item}
+                title={isScriptVisible ? "Hide Script Preview (Full Width Playback, Shift+P)" : "Show Script Preview (Shift+P)"}
+              >
+                <div className="flex items-center gap-2">
+                  <FileText size={14} className={cn("text-text-muted", isScriptVisible && "text-blue-500")} />
+                  <span>Script Preview</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={cn(
+                    "text-[8px] font-bold px-1.5 py-0.5 rounded uppercase",
+                    isScriptVisible ? "bg-emerald-500/10 text-emerald-500" : "bg-blue-500/10 text-blue-500"
+                  )}>
+                    {isScriptVisible ? 'Visible' : 'Hidden'}
+                  </span>
+                  <kbd className={UI_TOKENS.badge.shortcut}>Shift+P</kbd>
                 </div>
               </button>
             )}

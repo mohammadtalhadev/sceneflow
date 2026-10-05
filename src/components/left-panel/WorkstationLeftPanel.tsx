@@ -64,6 +64,8 @@ export interface WorkstationLeftPanelProps {
   onRealignCues?: () => void;
   isAligning?: boolean;
   alignSuccess?: boolean;
+  isFullWidthMode?: boolean;
+  onRestoreScript?: () => void;
   style?: React.CSSProperties;
   className?: string;
 }
@@ -122,6 +124,8 @@ export const WorkstationLeftPanel: React.FC<WorkstationLeftPanelProps> = memo(({
   onRealignCues = () => {},
   isAligning = false,
   alignSuccess = false,
+  isFullWidthMode = false,
+  onRestoreScript,
   style,
   className,
 }) => {
@@ -285,6 +289,8 @@ export const WorkstationLeftPanel: React.FC<WorkstationLeftPanelProps> = memo(({
           onToggleVideoCollapsed={onToggleVideoCollapsed}
           currentTime={currentTime}
           duration={duration}
+          isFullWidthMode={isFullWidthMode}
+          onRestoreScript={onRestoreScript}
         />
 
         {/* Collapsible YouTube Source Input Bar */}

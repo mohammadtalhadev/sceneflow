@@ -18,7 +18,8 @@ import {
   Cpu,
   Layers,
   Music,
-  Image as ImageIcon
+  Image as ImageIcon,
+  FileText
 } from 'lucide-react';
 import { 
   getAllAvailableModels, 
@@ -49,6 +50,7 @@ export interface CopilotPanelProps {
   cues: Cue[];
   onApplyCues: (newCues: Cue[]) => void;
   onApplyScript: (newScript: string) => void;
+  onSwitchToScript?: () => void;
 }
 
 const PROVIDER_BADGES: Record<AIProvider, { label: string; colorClass: string }> = {
@@ -68,6 +70,7 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
   cues,
   onApplyCues,
   onApplyScript,
+  onSwitchToScript,
 }) => {
   const [selectedModel, setSelectedModel] = useState<string>(() => getSavedModel());
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>(() => getAllAvailableModels());
@@ -347,7 +350,7 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
         aria-hidden="true"
       />
       <aside 
-        className="fixed inset-y-0 right-0 z-50 lg:static lg:z-auto w-full sm:w-96 lg:w-96 h-full flex flex-col bg-surface border-l border-border-main shadow-2xl transition-all select-none text-text-main animate-in slide-in-from-right duration-200"
+        className="fixed inset-y-0 right-0 z-50 lg:static lg:z-auto w-full sm:w-96 lg:w-[420px] xl:w-[460px] shrink-0 h-full flex flex-col bg-surface border-l border-border-main shadow-2xl transition-all select-none text-text-main animate-in slide-in-from-right duration-200"
         aria-label="AI Director Copilot"
       >
         {/* Header */}
@@ -367,6 +370,22 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Switch to Script Preview Button */}
+            {onSwitchToScript && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onSwitchToScript();
+                }}
+                title="Switch back to Script Preview"
+                className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg text-[9.5px] font-bold text-text-muted hover:text-text-main hover:bg-surface border border-transparent hover:border-border-subtle transition-colors"
+              >
+                <FileText size={11} className="text-blue-500" />
+                <span>Script</span>
+              </button>
+            )}
+
             {/* Keys Settings */}
             <button
               type="button"
