@@ -19,7 +19,12 @@ import {
   Layers,
   Music,
   Image as ImageIcon,
-  FileText
+  FileText,
+  Copy,
+  Paperclip,
+  AlertTriangle,
+  AlertCircle,
+  Eye
 } from 'lucide-react';
 import { 
   getAllAvailableModels, 
@@ -34,6 +39,8 @@ import {
   getSavedApiKeys,
   rankAndGroupModels,
   isProviderConfigured,
+  isHighDemandOrQuotaError,
+  isModelBusy,
   type AIModelOption,
   type AIProvider
 } from '../../services/aiService';
@@ -86,8 +93,34 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Copying & multimodal attachment states
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [isThreadCopied, setIsThreadCopied] = useState<boolean>(false);
+  const [attachedImage, setAttachedImage] = useState<{
+    dataUrl: string;
+    mimeType: string;
+    name: string;
+  } | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
   const currentModelObj = useMemo(() => {
     return availableModels.find(m => m.id === selectedModel) || availableModels[0];
+  }, [availableModels, selectedModel]);
+
+  // Recommended fallback model when current model hits high demand or quota limits
+  const recommendedFallbackModel = useMemo(() => {
+    const keys = getSavedApiKeys();
+    const workingCandidates = availableModels.filter(
+      m => m.id !== selectedModel && isProviderConfigured(m.provider, keys) && !isModelBusy(m.id)
+    );
+    if (workingCandidates.length === 0) {
+      // Any non-busy model as fallback suggestion
+      const anyWorking = availableModels.filter(m => m.id !== selectedModel && !isModelBusy(m.id));
+      return anyWorking[0] || null;
+    }
+    const ranked = rankAndGroupModels(workingCandidates, keys);
+    return ranked.configured[0] || workingCandidates[0];
   }, [availableModels, selectedModel]);
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
@@ -221,18 +254,74 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
     }
   };
 
+  const handleCopyMessage = async (msgId: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedMsgId(msgId);
+      setTimeout(() => setCopiedMsgId(null), 2000);
+    } catch (e) {
+      console.error('Failed to copy message:', e);
+    }
+  };
+
+  const handleCopyFullThread = async () => {
+    try {
+      const threadText = messages
+        .map(m => {
+          const roleLabel = m.role === 'user' ? 'DIRECTOR' : `AI PRODUCTION COPILOT (${currentModelObj.name})`;
+          const timestamp = new Date(m.timestamp).toLocaleTimeString();
+          return `[${timestamp}] ${roleLabel}:\n${m.content}\n`;
+        })
+        .join('\n---\n\n');
+      await navigator.clipboard.writeText(threadText);
+      setIsThreadCopied(true);
+      setTimeout(() => setIsThreadCopied(false), 2000);
+    } catch (e) {
+      console.error('Failed to copy thread:', e);
+    }
+  };
+
+  const handleImageFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setErrorMsg('Please upload a valid image file (PNG, JPG, WebP).');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setErrorMsg('Image file size exceeds 8MB limit.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setAttachedImage({
+          dataUrl: reader.result,
+          mimeType: file.type,
+          name: file.name,
+        });
+        setErrorMsg(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSendMessage = useCallback(async (textToSend?: string) => {
     const text = (textToSend || inputPrompt).trim();
-    if (!text || isLoading) return;
+    if ((!text && !attachedImage) || isLoading) return;
 
+    const currentImage = attachedImage;
     setErrorMsg(null);
     setInputPrompt('');
+    setAttachedImage(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: text,
+      content: text || (currentImage ? `[Attached Reference Image: ${currentImage.name}] Analyze this visual keyframe for cinematic direction.` : ''),
       timestamp: Date.now(),
+      imageUrl: currentImage?.dataUrl,
+      imageMimeType: currentImage?.mimeType,
+      imageName: currentImage?.name,
     };
 
     const newHistory = [...messages, userMessage];
@@ -266,11 +355,29 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
     } finally {
       setIsLoading(false);
     }
-  }, [inputPrompt, isLoading, messages, selectedModel, scriptText, videoDuration, videoName, cues, isAutoOrchestrator]);
+  }, [inputPrompt, attachedImage, isLoading, messages, selectedModel, scriptText, videoDuration, videoName, cues, isAutoOrchestrator]);
+
+  const handleSwitchAndRetry = (newModelId: string) => {
+    setSelectedModel(newModelId);
+    saveSelectedModel(newModelId);
+    setErrorMsg(null);
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    if (lastUserMsg) {
+      handleSendMessage(lastUserMsg.content);
+    }
+  };
+
+  const handleRetrySameModel = () => {
+    setErrorMsg(null);
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    if (lastUserMsg) {
+      handleSendMessage(lastUserMsg.content);
+    }
+  };
 
   const handleApplyAction = (msgId: string, action: ChatMessage['action']) => {
     if (!action) return;
-    if (action.type === 'apply_cues') {
+    if (action.type === 'apply_cues' || action.type === 'autopilot') {
       onApplyCues(action.data);
     } else if (action.type === 'update_script') {
       onApplyScript(action.data);
@@ -310,6 +417,8 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
   const renderModelItem = (model: AIModelOption, isConfigured: boolean) => {
     const badge = PROVIDER_BADGES[model.provider] || PROVIDER_BADGES.gemini;
     const isSelected = model.id === selectedModel;
+    const isBusy = isModelBusy(model.id);
+
     return (
       <button
         key={model.id}
@@ -328,6 +437,14 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
             <span className="truncate font-semibold">{model.name}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {isBusy && (
+              <span 
+                className="text-[8px] px-1 py-0.2 rounded font-mono bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold flex items-center gap-0.5"
+                title="Model currently experiencing high demand / traffic spikes"
+              >
+                <AlertTriangle size={8} /> High Demand
+              </span>
+            )}
             <span className={cn("text-[8px] px-1 py-0.2 rounded font-mono border font-bold", badge.colorClass)}>
               {badge.label}
             </span>
@@ -350,9 +467,34 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
         aria-hidden="true"
       />
       <aside 
-        className="fixed inset-y-0 right-0 z-50 lg:static lg:z-auto w-full sm:w-96 lg:w-[420px] xl:w-[460px] shrink-0 h-full flex flex-col bg-surface border-l border-border-main shadow-2xl transition-all select-none text-text-main animate-in slide-in-from-right duration-200"
+        className="fixed inset-y-0 right-0 z-50 lg:static lg:z-auto w-full sm:w-96 lg:w-[420px] xl:w-[460px] shrink-0 h-full flex flex-col bg-surface border-l border-border-main shadow-2xl transition-all select-none text-text-main animate-in slide-in-from-right duration-200 relative"
         aria-label="AI Director Copilot"
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDraggingOver(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setIsDraggingOver(false);
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDraggingOver(false);
+          if (e.dataTransfer.files?.[0]) {
+            handleImageFile(e.dataTransfer.files[0]);
+          }
+        }}
       >
+        {/* Drag and Drop Visual Target Overlay */}
+        {isDraggingOver && (
+          <div className="absolute inset-0 bg-purple-950/85 backdrop-blur-xs z-50 flex flex-col items-center justify-center border-2 border-dashed border-purple-400 p-6 text-center text-white pointer-events-none animate-in fade-in duration-150">
+            <ImageIcon size={38} className="text-purple-300 mb-2 animate-bounce" />
+            <p className="font-black text-sm">Drop Reference Image Here</p>
+            <p className="text-xs text-purple-200 mt-1 max-w-xs">Uploads storyboard, keyframe or camera visual reference to Copilot</p>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border-subtle bg-surface-subtle shrink-0">
           <div className="flex items-center gap-2">
@@ -370,6 +512,21 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Copy Full Directorial Log */}
+            <button
+              type="button"
+              onClick={handleCopyFullThread}
+              title={isThreadCopied ? "Thread Copied to Clipboard!" : "Copy Full Directorial Thread"}
+              className={cn(
+                "p-1.5 rounded-lg border transition-all",
+                isThreadCopied 
+                  ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
+                  : "text-text-muted hover:text-text-main hover:bg-surface border-transparent hover:border-border-subtle"
+              )}
+            >
+              {isThreadCopied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+            </button>
+
             {/* Switch to Script Preview Button */}
             {onSwitchToScript && (
               <button
@@ -483,6 +640,14 @@ What would you like to direct?`,
             <span className={cn("text-[8.5px] px-1.5 py-0.2 rounded font-mono border font-bold", currentBadge.colorClass)}>
               {currentBadge.label}
             </span>
+            {isModelBusy(selectedModel) && (
+              <span 
+                className="text-[8px] px-1.5 py-0.2 rounded font-mono bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold flex items-center gap-0.5 animate-pulse"
+                title="This model is currently experiencing high demand / spikes"
+              >
+                <AlertTriangle size={8} /> High Demand
+              </span>
+            )}
           </div>
 
           <button
@@ -625,17 +790,38 @@ What would you like to direct?`,
                 msg.role === 'user' ? "items-end" : "items-start"
               )}
             >
-              <div className="text-[9.5px] font-bold text-text-muted uppercase tracking-wider px-1 flex items-center gap-1.5">
-                {msg.role === 'user' ? (
-                  <span>You</span>
-                ) : (
-                  <>
-                    <span className="text-text-main font-black">AI Director</span>
-                    <span className="text-[8px] px-1 py-0.2 rounded font-mono bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20">
-                      {currentModelObj.name}
+              <div className="text-[9.5px] font-bold text-text-muted uppercase tracking-wider px-1 flex items-center justify-between w-full">
+                <div className="flex items-center gap-1.5">
+                  {msg.role === 'user' ? (
+                    <span>You</span>
+                  ) : (
+                    <>
+                      <span className="text-text-main font-black">AI Director</span>
+                      <span className="text-[8px] px-1 py-0.2 rounded font-mono bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20">
+                        {currentModelObj.name}
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                {/* Copy Single Message Button */}
+                <button
+                  type="button"
+                  onClick={() => handleCopyMessage(msg.id, msg.content)}
+                  title={copiedMsgId === msg.id ? "Copied!" : "Copy message"}
+                  className={cn(
+                    "p-0.5 rounded text-text-muted hover:text-text-main transition-colors",
+                    copiedMsgId === msg.id && "text-green-500 font-bold"
+                  )}
+                >
+                  {copiedMsgId === msg.id ? (
+                    <span className="flex items-center gap-0.5 text-[8.5px] text-green-500">
+                      <Check size={10} /> Copied
                     </span>
-                  </>
-                )}
+                  ) : (
+                    <Copy size={10} />
+                  )}
+                </button>
               </div>
 
               <div
@@ -646,29 +832,110 @@ What would you like to direct?`,
                     : "bg-surface-subtle border border-border-subtle text-text-main rounded-bl-xs"
                 )}
               >
+                {/* User attached reference image preview */}
+                {msg.imageUrl && (
+                  <div className="mb-2 rounded-xl overflow-hidden border border-white/20 max-w-[260px] bg-black/40 shadow-xs">
+                    <img 
+                      src={msg.imageUrl} 
+                      alt={msg.imageName || 'Reference'} 
+                      className="w-full max-h-48 object-cover rounded-lg" 
+                    />
+                    {msg.imageName && (
+                      <div className="p-1 px-2 text-[9px] font-mono text-white/90 bg-black/60 truncate flex items-center gap-1">
+                        <ImageIcon size={9} />
+                        <span className="truncate">{msg.imageName}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Formatted Clean Content */}
                 <FormattedMessageContent content={msg.content} isUser={msg.role === 'user'} />
 
-                {/* Action Card Button (Apply Cues / Update Script) */}
-                {msg.action && (
+                {/* Action Card: Film Autopilot Approval Deck or Screenplay Update */}
+                {msg.action && (msg.action.type === 'apply_cues' || msg.action.type === 'autopilot') && (
+                  <div className="mt-3 p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/25 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles size={13} className="text-purple-500" />
+                        <span className="text-[10.5px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-300">
+                          Film Autopilot Sync Deck
+                        </span>
+                      </div>
+                      <span className="text-[8.5px] font-mono bg-purple-500/20 text-purple-600 dark:text-purple-300 px-1.5 py-0.2 rounded font-bold">
+                        {Array.isArray(msg.action.data) ? `${msg.action.data.length} Cues` : 'Cues Ready'}
+                      </span>
+                    </div>
+
+                    {/* Metric Pills */}
+                    <div className="grid grid-cols-3 gap-1.5 text-[9px]">
+                      <div className="bg-surface/90 border border-border-subtle p-1.5 rounded-lg flex flex-col items-center justify-center text-center">
+                        <span className="text-text-muted font-bold uppercase text-[8px]">Camera</span>
+                        <span className="font-mono font-bold text-purple-600 dark:text-purple-400">
+                          🎥 {msg.action.stats?.cameraCount ?? (Array.isArray(msg.action.data) ? msg.action.data.filter((c: any) => c.type === 'camera').length : 0)} Setups
+                        </span>
+                      </div>
+                      <div className="bg-surface/90 border border-border-subtle p-1.5 rounded-lg flex flex-col items-center justify-center text-center">
+                        <span className="text-text-muted font-bold uppercase text-[8px]">Sound & Lyria</span>
+                        <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                          🎵 {msg.action.stats?.audioCount ?? (Array.isArray(msg.action.data) ? msg.action.data.filter((c: any) => c.type === 'audio').length : 0)} Cues
+                        </span>
+                      </div>
+                      <div className="bg-surface/90 border border-border-subtle p-1.5 rounded-lg flex flex-col items-center justify-center text-center">
+                        <span className="text-text-muted font-bold uppercase text-[8px]">Dialogue</span>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          💬 {msg.action.stats?.dialogueCount ?? (Array.isArray(msg.action.data) ? msg.action.data.filter((c: any) => c.type === 'dialogue').length : 0)} Beats
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Big 1-Click Approve Button */}
+                    <button
+                      type="button"
+                      disabled={msg.action.isApplied}
+                      onClick={() => handleApplyAction(msg.id, msg.action)}
+                      className={cn(
+                        "w-full py-2 px-3 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer",
+                        msg.action.isApplied
+                          ? "bg-green-500/15 text-green-600 dark:text-green-400 border border-green-500/30 cursor-default"
+                          : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-500/20 active:scale-98"
+                      )}
+                    >
+                      {msg.action.isApplied ? (
+                        <>
+                          <Check size={13} className="text-green-500" />
+                          <span>Timeline Cues Synchronized & Active</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check size={13} />
+                          <span>✅ Approve All & Sync to Timeline</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Screenplay Revision Card */}
+                {msg.action && msg.action.type === 'update_script' && (
                   <div className="mt-2.5 pt-2 border-t border-border-subtle/80 flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                      <Wand2 size={11} /> Ready to apply
+                      <FileText size={11} /> Screenplay Revision Ready
                     </span>
                     <button
                       type="button"
                       disabled={msg.action.isApplied}
                       onClick={() => handleApplyAction(msg.id, msg.action)}
                       className={cn(
-                        "px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all flex items-center gap-1 shadow-2xs",
+                        "px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all flex items-center gap-1 shadow-2xs cursor-pointer",
                         msg.action.isApplied
                           ? "bg-green-500/10 text-green-600 border border-green-500/20 cursor-default"
-                          : "bg-purple-600 hover:bg-purple-700 text-white active:scale-95 cursor-pointer"
+                          : "bg-purple-600 hover:bg-purple-700 text-white active:scale-95"
                       )}
                     >
                       {msg.action.isApplied ? (
                         <>
-                          <Check size={11} /> Applied
+                          <Check size={11} /> Screenplay Applied
                         </>
                       ) : (
                         <>
@@ -693,10 +960,58 @@ What would you like to direct?`,
             </div>
           )}
 
+          {/* Error Card with High Demand Alert & 1-Click Fallback Switch */}
           {errorMsg && (
-            <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-[11px] space-y-1">
-              <p className="font-bold">Execution Error</p>
-              <p>{errorMsg}</p>
+            <div className="animate-in fade-in slide-in-from-top duration-200">
+              {isHighDemandOrQuotaError(errorMsg) ? (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-text-main space-y-2 shadow-xs">
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                    <AlertTriangle size={15} className="shrink-0 animate-bounce" />
+                    <span className="text-[11px] font-black uppercase tracking-wider">
+                      Model High Demand / Capacity Spike
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-text-muted leading-relaxed">
+                    Google/Provider servers are currently experiencing temporary traffic spikes for <strong className="text-text-main">{currentModelObj.name}</strong>.
+                  </p>
+
+                  <div className="pt-1 flex flex-wrap gap-2">
+                    {recommendedFallbackModel && (
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchAndRetry(recommendedFallbackModel.id)}
+                        className="px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10.5px] flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                      >
+                        <Zap size={12} className="text-amber-300" />
+                        <span>⚡ Switch to {recommendedFallbackModel.name} & Retry</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleRetrySameModel}
+                      className="px-2.5 py-1.5 rounded-lg bg-surface border border-border-main hover:bg-surface-subtle text-text-main font-semibold text-[10.5px] flex items-center gap-1 transition-all cursor-pointer"
+                    >
+                      <RefreshCw size={11} />
+                      <span>Retry Again</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-[11px] space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <AlertCircle size={13} />
+                    <span>Execution Error</span>
+                  </div>
+                  <p>{errorMsg}</p>
+                  <button
+                    type="button"
+                    onClick={handleRetrySameModel}
+                    className="mt-1 px-2 py-0.5 rounded bg-surface border border-red-500/30 text-[10px] font-semibold text-text-main hover:bg-surface-subtle flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw size={10} /> Retry
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -707,36 +1022,83 @@ What would you like to direct?`,
         <div className="px-3 py-1.5 border-t border-border-subtle bg-surface flex items-center gap-1.5 overflow-x-auto scrollbar-hide shrink-0 text-[10px]">
           <button
             type="button"
+            onClick={() => handleSendMessage('Run full Film Autopilot: break down screenplay into frame-accurate camera setups, Google Lyria audio and sound design, and photorealistic Nano Banana visual prompts ready for 1-click timeline sync.')}
+            className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 whitespace-nowrap transition-all font-black flex items-center gap-1 shadow-2xs cursor-pointer"
+          >
+            <Sparkles size={11} /> 🚀 Run Film Autopilot
+          </button>
+          <button
+            type="button"
             onClick={() => handleSendMessage('Auto-orchestrate this scene: generate Lyria sound cues, Nano Banana visual keyframe prompt, and sync timeline cues.')}
-            className="px-2 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 whitespace-nowrap transition-colors font-bold"
+            className="px-2 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 whitespace-nowrap transition-colors font-bold cursor-pointer"
           >
             ⚡ Auto-Orchestrate Scene
           </button>
           <button
             type="button"
             onClick={() => handleSendMessage('Formulate adaptive Google Lyria audio and sound design cues for this scene.')}
-            className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
+            className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors cursor-pointer"
           >
             🎵 Google Lyria Audio
           </button>
           <button
             type="button"
             onClick={() => handleSendMessage('Create a photorealistic cinematic visual keyframe prompt using Nano Banana Pro / Imagen 3.')}
-            className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
+            className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors cursor-pointer"
           >
             🎨 Nano Banana Pro Visuals
           </button>
           <button
             type="button"
             onClick={() => handleSendMessage('Auto-sync screenplay cues between script and video timeline.')}
-            className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
+            className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors cursor-pointer"
           >
             🎬 Auto-Sync Cues
           </button>
         </div>
 
-        {/* Input Bar */}
+        {/* Input Bar with Image Attachment Support */}
         <div className="p-3 border-t border-border-main bg-surface-subtle shrink-0">
+          {/* Hidden File Input for Image Attachments */}
+          <input
+            type="file"
+            ref={imageInputRef}
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.[0]) {
+                handleImageFile(e.target.files[0]);
+              }
+            }}
+          />
+
+          {/* Attached Image Thumbnail Chip */}
+          {attachedImage && (
+            <div className="flex items-center justify-between bg-surface border border-purple-500/30 rounded-lg px-2 py-1 mb-2 animate-in fade-in">
+              <div className="flex items-center gap-2 truncate">
+                <img 
+                  src={attachedImage.dataUrl} 
+                  alt="Thumbnail" 
+                  className="w-6 h-6 object-cover rounded shrink-0 border border-border-subtle" 
+                />
+                <span className="text-[10px] font-mono text-text-main truncate max-w-[200px]">
+                  {attachedImage.name}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAttachedImage(null);
+                  if (imageInputRef.current) imageInputRef.current.value = '';
+                }}
+                className="p-1 text-text-muted hover:text-red-500 rounded transition-colors cursor-pointer"
+                title="Remove attached image"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -748,7 +1110,7 @@ What would you like to direct?`,
               <textarea
                 ref={textareaRef}
                 rows={2}
-                placeholder={`Ask ${currentModelObj.name} (e.g. 'Generate Lyria audio cues and Nano Banana camera visual')...`}
+                placeholder={attachedImage ? "Add directorial instruction for this image..." : `Ask ${currentModelObj.name} (e.g. 'Generate Lyria audio cues and Nano Banana camera visual')...`}
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
                 onKeyDown={(e) => {
@@ -761,9 +1123,24 @@ What would you like to direct?`,
               />
             </div>
 
+            {/* Paperclip Image Attachment Button */}
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              title="Attach Reference Image / Storyboard Keyframe"
+              className={cn(
+                "p-2.5 rounded-xl border transition-all cursor-pointer shrink-0",
+                attachedImage 
+                  ? "border-purple-500 text-purple-600 bg-purple-500/10 shadow-xs" 
+                  : "border-border-main text-text-muted hover:text-text-main hover:bg-surface"
+              )}
+            >
+              <Paperclip size={15} />
+            </button>
+
             <button
               type="submit"
-              disabled={isLoading || !inputPrompt.trim()}
+              disabled={isLoading || (!inputPrompt.trim() && !attachedImage)}
               className="p-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white font-bold transition-all shadow-xs active:scale-95 cursor-pointer shrink-0"
               title="Send message (Enter)"
             >

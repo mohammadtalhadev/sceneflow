@@ -150,11 +150,20 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
+  imageUrl?: string;
+  imageMimeType?: string;
+  imageName?: string;
   action?: {
-    type: 'apply_cues' | 'update_script';
+    type: 'apply_cues' | 'update_script' | 'autopilot';
     data: any;
     label: string;
     isApplied?: boolean;
+    stats?: {
+      totalCues?: number;
+      cameraCount?: number;
+      audioCount?: number;
+      dialogueCount?: number;
+    };
   };
 }
 
@@ -233,6 +242,45 @@ export function isProviderConfigured(provider: AIProvider, keys: ApiKeysConfig):
   return false;
 }
 
+const BUSY_MODELS_CACHE = new Map<string, number>();
+
+export function markModelBusy(modelId: string): void {
+  BUSY_MODELS_CACHE.set(modelId, Date.now());
+}
+
+export function unmarkModelBusy(modelId: string): void {
+  BUSY_MODELS_CACHE.delete(modelId);
+}
+
+export function isModelBusy(modelId: string): boolean {
+  const ts = BUSY_MODELS_CACHE.get(modelId);
+  if (!ts) return false;
+  // Mark busy expires after 3 minutes to auto-recover
+  if (Date.now() - ts > 3 * 60 * 1000) {
+    BUSY_MODELS_CACHE.delete(modelId);
+    return false;
+  }
+  return true;
+}
+
+export function isHighDemandOrQuotaError(errorMsg?: string | null): boolean {
+  if (!errorMsg) return false;
+  const lower = errorMsg.toLowerCase();
+  return (
+    lower.includes('high demand') ||
+    lower.includes('spikes in demand') ||
+    lower.includes('resource_exhausted') ||
+    lower.includes('capacity') ||
+    lower.includes('rate limit') ||
+    lower.includes('quota') ||
+    lower.includes('overloaded') ||
+    lower.includes('429') ||
+    lower.includes('503') ||
+    lower.includes('temporarily unavailable') ||
+    lower.includes('try again later')
+  );
+}
+
 /**
  * Computes a numeric recency/version priority score for a model.
  * Models with higher version numbers (e.g. 3.7 > 3.5 > 3.1 > 2.5 > 2.0 > 1.5) rank higher.
@@ -270,6 +318,9 @@ export function getModelRecencyScore(model: AIModelOption): number {
   // Penalties for older/deprecated versions
   if (text.includes('3.5-turbo')) score -= 15000;
   if (text.includes('1.0') || text.includes('001-deprecated')) score -= 10000;
+
+  // Temporary demotion for models undergoing provider high-demand traffic spikes
+  if (isModelBusy(model.id)) score -= 25000;
 
   return score;
 }
@@ -520,6 +571,12 @@ When analyzing creative requests, orchestrate and delegate specialized sub-tasks
    - Formulates screenplay pacing, subtextual dialogue beats, and frame-accurate timeline cues across SceneFlow's 8 categories: dialogue, action, camera, shot, audio, vfx, transition, environment.
 4. CAMERA CHOREOGRAPHY & CONTINUITY:
    - 3D spatial staging, lens focal length, dolly/pan motion velocity, and continuity anchors.
+5. AUTOPILOT AI FILM MAKER PROTOCOL (ELEVENLABS / RUNWAY STYLE):
+   - When asked to "Run Film Autopilot", "Make Movie", or autonomously direct a scene, behave like an end-to-end autonomous filmmaker:
+   - Break down every scene beat into camera angles, lighting, dialogue pacing, and Foley sound design.
+   - Formulate a ready-to-render Google Lyria musical score prompt (tempo, key, instrumentation).
+   - Formulate visual keyframe art prompts for image generators (Nano Banana Pro / Midjourney / FLUX).
+   - Package all timeline cues into a unified 1-click approval block so the director only has to click "Approve All & Sync to Timeline"!
 
 Rules for Cue Generation:
 When asked to sync or generate cues, you must ALWAYS provide verbatim selectedText copied strictly from the user's screenplay.
@@ -617,52 +674,78 @@ export async function sendCopilotMessage({
   const modelConfig = allModels.find(m => m.id === modelId) || allModels[0];
   const keys = getSavedApiKeys();
 
-  // 1. OpenRouter Universal Gateway
-  if (modelConfig.provider === 'openrouter' || modelId.startsWith('openrouter/')) {
-    const key = keys.openrouterApiKey;
-    if (!key) {
-      throw new Error('Please configure your OpenRouter API key in Copilot Settings (click 🔑).');
+  const executeProviderCall = async (targetModel: AIModelOption): Promise<string> => {
+    // 1. OpenRouter Universal Gateway
+    if (targetModel.provider === 'openrouter' || targetModel.id.startsWith('openrouter/')) {
+      const key = keys.openrouterApiKey;
+      if (!key) throw new Error('Please configure your OpenRouter API key in Copilot Settings (click 🔑).');
+      return callOpenRouterDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
     }
-    return callOpenRouterDirect(key, modelConfig, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
-  }
 
-  // 2. Google Gemini Direct
-  if (modelConfig.provider === 'gemini') {
-    const key = keys.geminiApiKey;
-    if (!key) {
-      throw new Error('Please configure your Google Gemini API key in Copilot Settings (click 🔑).');
+    // 2. Google Gemini Direct
+    if (targetModel.provider === 'gemini') {
+      const key = keys.geminiApiKey;
+      if (!key) throw new Error('Please configure your Google Gemini API key in Copilot Settings (click 🔑).');
+      return callGeminiDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
     }
-    return callGeminiDirect(key, modelConfig, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
-  }
 
-  // 3. OpenAI Direct
-  if (modelConfig.provider === 'openai') {
-    const key = keys.openaiApiKey;
-    if (!key) {
-      throw new Error('Please configure your OpenAI API key in Copilot Settings (click 🔑).');
+    // 3. OpenAI Direct
+    if (targetModel.provider === 'openai') {
+      const key = keys.openaiApiKey;
+      if (!key) throw new Error('Please configure your OpenAI API key in Copilot Settings (click 🔑).');
+      return callOpenAIDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
     }
-    return callOpenAIDirect(key, modelConfig, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
-  }
 
-  // 4. Anthropic Claude Direct
-  if (modelConfig.provider === 'anthropic') {
-    const key = keys.anthropicApiKey;
-    if (!key) {
-      if (keys.openrouterApiKey) {
-        return callOpenRouterDirect(keys.openrouterApiKey, modelConfig, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+    // 4. Anthropic Claude Direct
+    if (targetModel.provider === 'anthropic') {
+      const key = keys.anthropicApiKey;
+      if (!key) {
+        if (keys.openrouterApiKey) {
+          return callOpenRouterDirect(keys.openrouterApiKey, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+        }
+        throw new Error('Please configure your Anthropic or OpenRouter API key in Copilot Settings (click 🔑).');
       }
-      throw new Error('Please configure your Anthropic or OpenRouter API key in Copilot Settings (click 🔑).');
+      return callAnthropicDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
     }
-    return callAnthropicDirect(key, modelConfig, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
-  }
 
-  // 5. Ollama Local
-  if (modelConfig.provider === 'ollama') {
-    const url = keys.ollamaUrl || 'http://localhost:11434';
-    return callOllamaDirect(url, modelConfig, messages, scriptText, isAutoOrchestrator);
-  }
+    // 5. Ollama Local
+    if (targetModel.provider === 'ollama') {
+      const url = keys.ollamaUrl || 'http://localhost:11434';
+      return callOllamaDirect(url, targetModel, messages, scriptText, isAutoOrchestrator);
+    }
 
-  throw new Error(`Provider for ${modelConfig.name} is not configured. Please check your API keys.`);
+    throw new Error(`Provider for ${targetModel.name} is not configured. Please check your API keys.`);
+  };
+
+  try {
+    const result = await executeProviderCall(modelConfig);
+    unmarkModelBusy(modelConfig.id);
+    return result;
+  } catch (err: any) {
+    if (isHighDemandOrQuotaError(err.message)) {
+      markModelBusy(modelConfig.id);
+
+      // In Auto Orchestrator mode, automatically attempt a fallback to an alternate configured model
+      if (isAutoOrchestrator) {
+        const fallbacks = allModels.filter(
+          m => m.id !== modelConfig.id && isProviderConfigured(m.provider, keys) && !isModelBusy(m.id)
+        );
+        fallbacks.sort((a, b) => getModelRecencyScore(b) - getModelRecencyScore(a));
+
+        if (fallbacks.length > 0) {
+          const fallbackModel = fallbacks[0];
+          try {
+            const fallbackResult = await executeProviderCall(fallbackModel);
+            unmarkModelBusy(fallbackModel.id);
+            return `> ⚠️ **Auto-Rerouted from ${modelConfig.name} due to provider server high demand.**\n> SceneFlow Copilot completed your directorial request using **${fallbackModel.name}**.\n\n${fallbackResult}`;
+          } catch {
+            // Fallback also failed, throw original error
+          }
+        }
+      }
+    }
+    throw err;
+  }
 }
 
 /**
@@ -684,7 +767,18 @@ async function callOpenRouterDirect(
 
   const payloadMessages = [
     { role: 'system', content: systemContent },
-    ...messages.map(m => ({ role: m.role, content: m.content })),
+    ...messages.map(m => {
+      if (m.imageUrl) {
+        return {
+          role: m.role,
+          content: [
+            { type: 'text', text: m.content },
+            { type: 'image_url', image_url: { url: m.imageUrl } },
+          ],
+        };
+      }
+      return { role: m.role, content: m.content };
+    }),
   ];
 
   const res = await fetch(endpoint, {
@@ -705,7 +799,9 @@ async function callOpenRouterDirect(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `OpenRouter returned status ${res.status}`);
+    const message = err.error?.message || `OpenRouter returned status ${res.status}`;
+    if (isHighDemandOrQuotaError(message)) markModelBusy(modelConfig.id);
+    throw new Error(message);
   }
 
   const data = await res.json();
@@ -735,10 +831,22 @@ async function callGeminiDirect(
       role: 'user',
       parts: [{ text: systemContent }],
     },
-    ...messages.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    })),
+    ...messages.map(m => {
+      const parts: any[] = [{ text: m.content }];
+      if (m.imageUrl) {
+        const base64Data = m.imageUrl.includes(',') ? m.imageUrl.split(',')[1] : m.imageUrl;
+        parts.push({
+          inlineData: {
+            mimeType: m.imageMimeType || 'image/jpeg',
+            data: base64Data,
+          },
+        });
+      }
+      return {
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts,
+      };
+    }),
   ];
 
   const res = await fetch(endpoint, {
@@ -755,7 +863,9 @@ async function callGeminiDirect(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Gemini API returned status ${res.status}`);
+    const message = err.error?.message || `Gemini API returned status ${res.status}`;
+    if (isHighDemandOrQuotaError(message)) markModelBusy(modelConfig.id);
+    throw new Error(message);
   }
 
   const data = await res.json();
@@ -781,7 +891,18 @@ async function callOpenAIDirect(
 
   const payloadMessages = [
     { role: 'system', content: systemContent },
-    ...messages.map(m => ({ role: m.role, content: m.content })),
+    ...messages.map(m => {
+      if (m.imageUrl) {
+        return {
+          role: m.role,
+          content: [
+            { type: 'text', text: m.content },
+            { type: 'image_url', image_url: { url: m.imageUrl } },
+          ],
+        };
+      }
+      return { role: m.role, content: m.content };
+    }),
   ];
 
   const res = await fetch(endpoint, {
@@ -800,7 +921,9 @@ async function callOpenAIDirect(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `OpenAI API returned status ${res.status}`);
+    const message = err.error?.message || `OpenAI API returned status ${res.status}`;
+    if (isHighDemandOrQuotaError(message)) markModelBusy(modelConfig.id);
+    throw new Error(message);
   }
 
   const data = await res.json();
@@ -820,10 +943,29 @@ async function callAnthropicDirect(
 
   const systemContent = buildRuntimeSystemPrompt(modelConfig, isAutoOrchestrator, videoName, videoDuration, scriptText);
 
-  const payloadMessages = messages.map(m => ({
-    role: m.role === 'assistant' ? 'assistant' : 'user',
-    content: m.content,
-  }));
+  const payloadMessages = messages.map(m => {
+    if (m.imageUrl) {
+      const base64Data = m.imageUrl.includes(',') ? m.imageUrl.split(',')[1] : m.imageUrl;
+      return {
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: m.imageMimeType || 'image/jpeg',
+              data: base64Data,
+            },
+          },
+          { type: 'text', text: m.content },
+        ],
+      };
+    }
+    return {
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: m.content,
+    };
+  });
 
   const modelId = modelConfig.id.includes('3-7') 
     ? 'claude-3-7-sonnet-20250219' 
@@ -847,7 +989,9 @@ async function callAnthropicDirect(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Anthropic returned status ${res.status}`);
+    const message = err.error?.message || `Anthropic returned status ${res.status}`;
+    if (isHighDemandOrQuotaError(message)) markModelBusy(modelConfig.id);
+    throw new Error(message);
   }
 
   const data = await res.json();
@@ -897,22 +1041,45 @@ async function callOllamaDirect(
  * Parses action payloads (e.g. apply_cues or update_script) from model markdown outputs.
  */
 export function extractCopilotAction(content: string): {
-  type: 'apply_cues' | 'update_script';
+  type: 'apply_cues' | 'update_script' | 'autopilot';
   data: any;
   label: string;
+  stats?: {
+    totalCues?: number;
+    cameraCount?: number;
+    audioCount?: number;
+    dialogueCount?: number;
+  };
 } | null {
   const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (!jsonMatch) return null;
 
   try {
     const parsed = JSON.parse(jsonMatch[1]);
-    if (parsed.action === 'apply_cues' && Array.isArray(parsed.cues)) {
+    const cues = parsed.cues || (Array.isArray(parsed) ? parsed : null);
+
+    if (Array.isArray(cues) && cues.length > 0) {
+      const cameraCount = cues.filter((c: any) => c.type === 'camera' || c.type === 'shot').length;
+      const audioCount = cues.filter((c: any) => c.type === 'audio').length;
+      const dialogueCount = cues.filter((c: any) => c.type === 'dialogue').length;
+
+      const isAutopilot = Boolean(parsed.scriptText || parsed.action === 'autopilot' || parsed.action === 'autopilot_production');
+
       return {
-        type: 'apply_cues',
-        data: parsed.cues,
-        label: `Apply ${parsed.cues.length} Cues to Timeline`,
+        type: isAutopilot ? 'autopilot' : 'apply_cues',
+        data: isAutopilot ? { cues, scriptText: parsed.scriptText } : cues,
+        label: isAutopilot
+          ? `Approve All & Sync ${cues.length} Cues to Timeline`
+          : `Apply ${cues.length} Cues to Timeline`,
+        stats: {
+          totalCues: cues.length,
+          cameraCount,
+          audioCount,
+          dialogueCount,
+        },
       };
     }
+
     if (parsed.action === 'update_script' && typeof parsed.scriptText === 'string') {
       return {
         type: 'update_script',
