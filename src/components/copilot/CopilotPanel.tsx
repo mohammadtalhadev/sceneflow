@@ -15,7 +15,10 @@ import {
   Wand2,
   FileCheck,
   Zap,
-  Cpu
+  Cpu,
+  Layers,
+  Music,
+  Image as ImageIcon
 } from 'lucide-react';
 import { 
   getAllAvailableModels, 
@@ -66,6 +69,7 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
 }) => {
   const [selectedModel, setSelectedModel] = useState<string>(() => getSavedModel());
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>(() => getAllAvailableModels());
+  const [isAutoOrchestrator, setIsAutoOrchestrator] = useState<boolean>(true);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState('');
@@ -81,7 +85,16 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
     {
       id: 'welcome',
       role: 'assistant',
-      content: `Hello Director! I am your **AI Copilot** for Seedance 2.5 filmmaking.\n\nI can:\n• **Auto-sync cues** between your video and screenplay\n• **Format Seedance 2.5 Auteur Scripts** with \`[[CAMERA_SETUP]]\` and \`[[STAGING]]\`\n• **Audit prompt fidelity** and spot missed beats\n• **Access hundreds of models** via OpenRouter, Gemini, OpenAI, Claude, or local Ollama.\n\nWhat would you like to direct?`,
+      content: `Hello Director! I am your **AI Production Copilot** for Cinema Direction & Virtual Production.
+
+I can:
+• **Auto-sync cues** between your video and screenplay
+• **Orchestrate specialized AI models** across sound (Google Lyria), visual keyframes (Nano Banana Pro / Imagen), and script sync (Gemini & Claude)
+• **Design camera choreography & staging** with 3D blocking and lens focal lengths
+• **Audit cinematic continuity** and narrative pacing
+• **Access 200+ models** via OpenRouter, Google Gemini, OpenAI, Claude, or local Ollama
+
+You can use **Auto Orchestrator** to automatically assign optimal models for each task, or pick your preferred model above. What would you like to direct?`,
       timestamp: Date.now(),
     },
   ]);
@@ -213,6 +226,7 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
         videoDuration,
         videoName,
         currentCues: cues,
+        isAutoOrchestrator,
       });
 
       const action = extractCopilotAction(reply);
@@ -231,7 +245,7 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [inputPrompt, isLoading, messages, selectedModel, scriptText, videoDuration, videoName, cues]);
+  }, [inputPrompt, isLoading, messages, selectedModel, scriptText, videoDuration, videoName, cues, isAutoOrchestrator]);
 
   const handleApplyAction = (msgId: string, action: ChatMessage['action']) => {
     if (!action) return;
@@ -284,9 +298,9 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h3 className="text-xs font-black uppercase tracking-wider">AI Copilot</h3>
-                <span className="text-[8.5px] px-1 py-0.2 rounded font-mono bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-bold">
-                  DIRECTOR
+                <h3 className="text-xs font-black uppercase tracking-wider">AI Director</h3>
+                <span className="text-[8.5px] px-1.5 py-0.2 rounded font-mono bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-bold">
+                  STUDIO
                 </span>
               </div>
             </div>
@@ -325,10 +339,50 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
           </div>
         </div>
 
+        {/* Mode Selector Strip: Auto Orchestrator vs Single Model */}
+        <div className="px-3 py-1.5 bg-surface-subtle border-b border-border-subtle flex items-center justify-between text-[10px] shrink-0">
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-text-muted uppercase tracking-wider text-[9px]">Mode:</span>
+            <div className="flex items-center gap-0.5 bg-surface border border-border-subtle rounded-lg p-0.5 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setIsAutoOrchestrator(true)}
+                title="AI automatically analyzes task and assigns Google Lyria (Audio), Nano Banana Pro (Visuals), and Gemini/Claude (Script)"
+                className={cn(
+                  "px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider transition-all flex items-center gap-1",
+                  isAutoOrchestrator
+                    ? "bg-purple-600 text-white shadow-xs"
+                    : "text-text-muted hover:text-text-main"
+                )}
+              >
+                <Zap size={10} className={isAutoOrchestrator ? "text-amber-300" : ""} />
+                <span>Auto Orchestrator</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAutoOrchestrator(false)}
+                title="Direct standard query to selected model only"
+                className={cn(
+                  "px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider transition-all flex items-center gap-1",
+                  !isAutoOrchestrator
+                    ? "bg-surface-subtle border border-border-main text-text-main shadow-xs"
+                    : "text-text-muted hover:text-text-main"
+                )}
+              >
+                <span>Single Model</span>
+              </button>
+            </div>
+          </div>
+
+          <span className="text-[9px] font-mono text-purple-600 dark:text-purple-400 font-bold hidden sm:inline">
+            {isAutoOrchestrator ? 'Lyria • Nano Banana' : 'Direct'}
+          </span>
+        </div>
+
         {/* Model Selector Bar */}
         <div ref={dropdownRef} className="relative px-3.5 py-1.5 border-b border-border-subtle bg-surface flex items-center justify-between text-xs shrink-0">
           <div className="flex items-center gap-1.5 text-[10px] font-bold text-text-muted uppercase tracking-wider">
-            <span>Model:</span>
+            <span>Primary Model:</span>
             <span className={cn("text-[8.5px] px-1.5 py-0.2 rounded font-mono border font-bold", currentBadge.colorClass)}>
               {currentBadge.label}
             </span>
@@ -337,7 +391,7 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
           <button
             type="button"
             onClick={() => setIsModelDropdownOpen(prev => !prev)}
-            className="flex items-center gap-1 px-2 py-1 rounded-md bg-surface-subtle hover:bg-surface border border-border-subtle text-[11px] font-semibold text-text-main transition-all max-w-[200px]"
+            className="flex items-center gap-1 px-2 py-1 rounded-md bg-surface-subtle hover:bg-surface border border-border-subtle text-[11px] font-semibold text-text-main transition-all max-w-[190px]"
           >
             <span className="truncate">{currentModelObj.name}</span>
             <ChevronDown size={11} className={cn("transition-transform shrink-0", isModelDropdownOpen && "rotate-180")} />
@@ -477,20 +531,19 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
               )}
             >
               <div className="text-[9.5px] font-bold text-text-muted uppercase tracking-wider px-1">
-                {msg.role === 'user' ? 'You' : 'Copilot'}
+                {msg.role === 'user' ? 'You' : 'AI Director'}
               </div>
 
               <div
                 className={cn(
-                  "p-3 rounded-2xl max-w-[92%] leading-relaxed break-words shadow-2xs select-text",
+                  "p-3 rounded-2xl max-w-[94%] leading-relaxed break-words shadow-2xs select-text",
                   msg.role === 'user'
                     ? "bg-purple-600 text-white rounded-br-xs"
                     : "bg-surface-subtle border border-border-subtle text-text-main rounded-bl-xs"
                 )}
               >
-                <div className="whitespace-pre-wrap font-sans text-xs">
-                  {msg.content}
-                </div>
+                {/* Formatted Clean Content */}
+                <FormattedMessageContent content={msg.content} isUser={msg.role === 'user'} />
 
                 {/* Action Card Button (Apply Cues / Update Script) */}
                 {msg.action && (
@@ -528,7 +581,11 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
           {isLoading && (
             <div className="flex items-center gap-2 text-text-muted text-[11px] p-2 animate-pulse">
               <RefreshCw size={13} className="animate-spin text-purple-500" />
-              <span>Directing scene with {currentModelObj.name}...</span>
+              <span>
+                {isAutoOrchestrator 
+                  ? 'Orchestrating Lyria (Sound) + Nano Banana (Visuals) + Script...' 
+                  : `Directing scene with ${currentModelObj.name}...`}
+              </span>
             </div>
           )}
 
@@ -546,24 +603,31 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
         <div className="px-3 py-1.5 border-t border-border-subtle bg-surface flex items-center gap-1.5 overflow-x-auto scrollbar-hide shrink-0 text-[10px]">
           <button
             type="button"
-            onClick={() => handleSendMessage('Suggest and generate timing cues for the active scene.')}
-            className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
+            onClick={() => handleSendMessage('Auto-orchestrate this scene: generate Lyria sound cues, Nano Banana visual keyframe prompt, and sync timeline cues.')}
+            className="px-2 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 whitespace-nowrap transition-colors font-bold"
           >
-            🎬 Sync Cues
+            ⚡ Auto-Orchestrate Scene
           </button>
           <button
             type="button"
-            onClick={() => handleSendMessage('Enhance dialogue pacing and subtext in this screenplay.')}
+            onClick={() => handleSendMessage('Formulate adaptive Google Lyria audio and sound design cues for this scene.')}
             className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
           >
-            🎭 Polish Dialogue
+            🎵 Google Lyria Audio
           </button>
           <button
             type="button"
-            onClick={() => handleSendMessage('Break down this scene into ByteDance Seedance 2.5 Auteur [[STAGING]] and [[CAMERA_SETUP]].')}
+            onClick={() => handleSendMessage('Create a photorealistic cinematic visual keyframe prompt using Nano Banana Pro / Imagen 3.')}
             className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
           >
-            📐 Seedance Blocking
+            🎨 Nano Banana Pro Visuals
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSendMessage('Auto-sync screenplay cues between script and video timeline.')}
+            className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
+          >
+            🎬 Auto-Sync Cues
           </button>
         </div>
 
@@ -580,7 +644,7 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
               <textarea
                 ref={textareaRef}
                 rows={2}
-                placeholder="Ask AI Director (e.g. 'Draft audio and camera cues for this beat')..."
+                placeholder="Direct scene (e.g. 'Generate Lyria music cues and Nano Banana camera visual for this scene')..."
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
                 onKeyDown={(e) => {
@@ -614,3 +678,117 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
     </>
   );
 };
+
+/**
+ * Formats Markdown without raw asterisk artifacts:
+ * - Bolds (**text**) render cleanly without asterisks
+ * - Bullets (•, -, *) render as sleek dots without asterisks
+ * - Inline code blocks render as styled badges
+ */
+function FormattedMessageContent({ content, isUser }: { content: string; isUser?: boolean }) {
+  // Strip raw JSON action blocks if present, since interactive action buttons render underneath
+  const cleanContent = content.replace(/```(?:json)?\s*\{\s*"action":\s*(?:"apply_cues"|"update_script")[\s\S]*?\}\s*```/g, '').trim();
+
+  const lines = cleanContent.split('\n');
+
+  return (
+    <div className={cn("space-y-1 font-sans text-xs leading-relaxed", isUser && "text-white")}>
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={idx} className="h-1" />;
+        }
+
+        // Section Headers (### or ####)
+        if (trimmed.startsWith('### ') || trimmed.startsWith('#### ') || trimmed.startsWith('## ')) {
+          const headerText = trimmed.replace(/^#{2,4}\s*/, '');
+          const isDelegation = headerText.toLowerCase().includes('delegation') || headerText.toLowerCase().includes('matrix') || headerText.toLowerCase().includes('director');
+          return (
+            <div 
+              key={idx} 
+              className={cn(
+                "font-black text-[11.5px] uppercase tracking-wider pt-2 pb-0.5 flex items-center gap-1.5",
+                isDelegation 
+                  ? "text-purple-600 dark:text-purple-400 border-b border-purple-500/20 mb-1" 
+                  : (isUser ? "text-white border-b border-white/20" : "text-text-main border-b border-border-subtle/50")
+              )}
+            >
+              <Sparkles size={11} className={cn("shrink-0", isUser ? "text-white" : "text-purple-500")} />
+              <span>{renderInlineMarkdown(headerText, isUser)}</span>
+            </div>
+          );
+        }
+
+        // Bullet point lines: •, -, or *
+        if (trimmed.startsWith('•') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          const bulletText = trimmed.replace(/^(?:•|-|\*)\s*/, '');
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-0.5 my-0.5">
+              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0 mt-1.5", isUser ? "bg-white/80" : "bg-purple-500")} />
+              <div className="flex-1 text-[11.5px] leading-snug">
+                {renderInlineMarkdown(bulletText, isUser)}
+              </div>
+            </div>
+          );
+        }
+
+        // Regular paragraph
+        return (
+          <p key={idx} className="text-[11.5px] leading-relaxed">
+            {renderInlineMarkdown(line, isUser)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function renderInlineMarkdown(text: string, isUser?: boolean): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  // Tokenize **bold**, `code`, and *italic*
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith('**') && token.endsWith('**')) {
+      const inner = token.slice(2, -2);
+      parts.push(
+        <strong key={match.index} className={cn("font-bold", isUser ? "text-white" : "text-text-main")}>
+          {inner}
+        </strong>
+      );
+    } else if (token.startsWith('`') && token.endsWith('`')) {
+      const inner = token.slice(1, -1);
+      parts.push(
+        <code 
+          key={match.index} 
+          className={cn(
+            "px-1 py-0.2 rounded font-mono text-[10.5px] font-semibold border",
+            isUser ? "bg-white/20 text-white border-white/30" : "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
+          )}
+        >
+          {inner}
+        </code>
+      );
+    } else if (token.startsWith('*') && token.endsWith('*')) {
+      const inner = token.slice(1, -1);
+      parts.push(
+        <em key={match.index} className={cn("italic", isUser ? "text-white/90" : "text-text-muted")}>
+          {inner}
+        </em>
+      );
+    }
+    lastIndex = match.index + token.length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : [text];
+}

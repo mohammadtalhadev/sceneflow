@@ -368,17 +368,23 @@ export async function fetchModelsForProvider(
   return [];
 }
 
-const COPILOT_SYSTEM_PROMPT = `You are the AI Director Copilot inside SceneFlow Studio (Seedance 2.5 Cinema Edition).
-You assist AI filmmakers in:
-1. Script-to-screen synchronization and prompt adherence tracking.
-2. Formulating ByteDance Seedance 2.5 Auteur Scripts with state-driven metadata:
-   - [[STAGING]]: 5-part scene blocking (Environment, Blocking, Characters, Light, Sound).
-   - [[CAMERA_SETUP]]: 3D coordinates, lens mm, and motion velocity.
-   - [[CONTINUITY]]: State-in and state-out anchors.
-   - [[LIGHTING]]: Volumetric atmosphere, color temperature, and key/fill ratios.
-   - [<BRIEF>]: Multi-camera execution commands.
-3. Automatically generating chronological sync cues matching SceneFlow's 8 categories:
-   dialogue, action, camera, shot, audio, vfx, transition, environment.
+const COPILOT_SYSTEM_PROMPT = `You are the AI Production Director & Multi-Model Orchestrator inside SceneFlow Studio.
+You serve as Lead Director & Showrunner, collaborating with specialized AI creative departments to achieve cinematic fidelity:
+
+MULTI-MODEL TASK DELEGATION MATRIX:
+When analyzing creative requests, orchestrate and delegate specialized sub-tasks to the optimal models:
+1. AUDIO & SOUND DESIGN (Google Lyria / AudioCraft):
+   - Generates tempo, key, instrumentation, acoustic space, and emotional leitmotifs.
+   - Formulates Foley, environmental ambience, and precise audio cues with timestamps.
+2. VISUAL CONCEPT ART & KEYFRAMING (Nano Banana Pro / Imagen 3 / FLUX.1 Pro):
+   - Formulates photorealistic scene prompts with camera lens (e.g. 35mm anamorphic, f/1.8), lighting ratios, color temperature, and volumetric depth.
+3. SCRIPT, DIALOGUE & CUE SYNCHRONIZATION (Google Gemini 2.0 Flash / Claude 3.5 Sonnet):
+   - Formulates screenplay pacing, subtextual dialogue beats, and frame-accurate timeline cues across SceneFlow's 8 categories: dialogue, action, camera, shot, audio, vfx, transition, environment.
+4. CAMERA CHOREOGRAPHY & CONTINUITY:
+   - 3D spatial staging, lens focal length, dolly/pan motion velocity, and continuity anchors.
+
+ORCHESTRATION OUTPUT FORMAT:
+When orchestrating a scene, begin with a concise "🎬 Director Delegation Plan" specifying which specialized model leads each discipline, then deliver production-ready assets (Sound specs, Keyframe visual prompts, and Screenplay cues).
 
 Rules for Cue Generation:
 When asked to sync or generate cues, you must ALWAYS provide verbatim selectedText copied strictly from the user's screenplay.
@@ -416,6 +422,7 @@ export async function sendCopilotMessage({
   videoDuration,
   videoName,
   currentCues,
+  isAutoOrchestrator = true,
 }: {
   messages: ChatMessage[];
   modelId: string;
@@ -423,6 +430,7 @@ export async function sendCopilotMessage({
   videoDuration?: number;
   videoName?: string;
   currentCues?: Cue[];
+  isAutoOrchestrator?: boolean;
 }): Promise<string> {
   const allModels = getAllAvailableModels();
   const modelConfig = allModels.find(m => m.id === modelId) || allModels[0];
@@ -434,7 +442,7 @@ export async function sendCopilotMessage({
     if (!key) {
       throw new Error('Please configure your OpenRouter API key in Copilot Settings (click 🔑).');
     }
-    return callOpenRouterDirect(key, modelId, messages, scriptText, videoDuration, videoName);
+    return callOpenRouterDirect(key, modelId, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
   }
 
   // 2. Google Gemini Direct
@@ -443,7 +451,7 @@ export async function sendCopilotMessage({
     if (!key) {
       throw new Error('Please configure your Google Gemini API key in Copilot Settings (click 🔑).');
     }
-    return callGeminiDirect(key, modelId, messages, scriptText, videoDuration, videoName);
+    return callGeminiDirect(key, modelId, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
   }
 
   // 3. OpenAI Direct
@@ -452,7 +460,7 @@ export async function sendCopilotMessage({
     if (!key) {
       throw new Error('Please configure your OpenAI API key in Copilot Settings (click 🔑).');
     }
-    return callOpenAIDirect(key, modelId, messages, scriptText, videoDuration, videoName);
+    return callOpenAIDirect(key, modelId, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
   }
 
   // 4. Anthropic Claude Direct
@@ -461,18 +469,18 @@ export async function sendCopilotMessage({
     if (!key) {
       // If no Anthropic key, check if OpenRouter key is present as seamless fallback!
       if (keys.openrouterApiKey) {
-        return callOpenRouterDirect(keys.openrouterApiKey, 'anthropic/claude-3.5-sonnet', messages, scriptText, videoDuration, videoName);
+        return callOpenRouterDirect(keys.openrouterApiKey, 'anthropic/claude-3.5-sonnet', messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
       }
       throw new Error('Please configure your Anthropic or OpenRouter API key in Copilot Settings (click 🔑).');
     }
-    return callAnthropicDirect(key, modelId, messages, scriptText, videoDuration, videoName);
+    return callAnthropicDirect(key, modelId, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
   }
 
   // 5. Ollama Local
   if (modelConfig.provider === 'ollama') {
     const url = keys.ollamaUrl || 'http://localhost:11434';
     const rawModel = modelId.replace(/^ollama\//, '') || keys.ollamaModel || 'llama3';
-    return callOllamaDirect(url, rawModel, messages, scriptText);
+    return callOllamaDirect(url, rawModel, messages, scriptText, isAutoOrchestrator);
   }
 
   throw new Error(`Provider for ${modelConfig.name} is not configured. Please check your API keys.`);
@@ -487,12 +495,23 @@ async function callOpenRouterDirect(
   messages: ChatMessage[],
   scriptText: string,
   videoDuration?: number,
-  videoName?: string
+  videoName?: string,
+  isAutoOrchestrator: boolean = true
 ): Promise<string> {
   const cleanModelId = modelId.replace(/^openrouter\//, '');
   const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
 
+  const orchestrationPrompt = isAutoOrchestrator ? `
+MULTI-MODEL PRODUCTION DELEGATION DIRECTIVE:
+You are acting as the Lead AI Director orchestrating specialized AI models:
+- Sound Generation & Foley: Delegate to Google Lyria (music tempo, key, acoustic layers, audio cue timestamps).
+- Visual Keyframes & Concept Art: Delegate to Nano Banana Pro / Imagen 3 (photorealistic camera prompts, lens mm, lighting setup).
+- Screenplay & Timeline Cues: Delegate to Google Gemini / Claude (dialogue beats, verbatim cues).
+
+State the "🎬 Director Delegation Matrix" clearly at the top, followed by each department's assets and JSON cues.` : '';
+
   const systemContent = `${COPILOT_SYSTEM_PROMPT}
+${orchestrationPrompt}
 
 CURRENT ACTIVE FILM CONTEXT:
 - Video Clip: ${videoName || 'Loaded clip'} (${videoDuration ? `${videoDuration.toFixed(1)}s` : 'unknown duration'})
@@ -540,9 +559,19 @@ async function callGeminiDirect(
   messages: ChatMessage[],
   scriptText: string,
   videoDuration?: number,
-  videoName?: string
+  videoName?: string,
+  isAutoOrchestrator: boolean = true
 ): Promise<string> {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const orchestrationPrompt = isAutoOrchestrator ? `
+MULTI-MODEL PRODUCTION DELEGATION DIRECTIVE:
+You are acting as the Lead AI Director orchestrating specialized AI models:
+- Sound Generation & Foley: Delegate to Google Lyria (music tempo, key, acoustic layers, audio cue timestamps).
+- Visual Keyframes & Concept Art: Delegate to Nano Banana Pro / Imagen 3 (photorealistic camera prompts, lens mm, lighting setup).
+- Screenplay & Timeline Cues: Delegate to Google Gemini / Claude (dialogue beats, verbatim cues).
+
+State the "🎬 Director Delegation Matrix" clearly at the top, followed by each department's assets and JSON cues.` : '';
 
   const contents = [
     {
@@ -550,6 +579,7 @@ async function callGeminiDirect(
       parts: [
         {
           text: `${COPILOT_SYSTEM_PROMPT}
+${orchestrationPrompt}
 
 CURRENT ACTIVE FILM CONTEXT:
 - Video Clip: ${videoName || 'Loaded clip'} (${videoDuration ? `${videoDuration.toFixed(1)}s` : 'unknown duration'})
@@ -591,11 +621,22 @@ async function callOpenAIDirect(
   messages: ChatMessage[],
   scriptText: string,
   videoDuration?: number,
-  videoName?: string
+  videoName?: string,
+  isAutoOrchestrator: boolean = true
 ): Promise<string> {
   const endpoint = 'https://api.openai.com/v1/chat/completions';
 
+  const orchestrationPrompt = isAutoOrchestrator ? `
+MULTI-MODEL PRODUCTION DELEGATION DIRECTIVE:
+You are acting as the Lead AI Director orchestrating specialized AI models:
+- Sound Generation & Foley: Delegate to Google Lyria (music tempo, key, acoustic layers, audio cue timestamps).
+- Visual Keyframes & Concept Art: Delegate to Nano Banana Pro / Imagen 3 (photorealistic camera prompts, lens mm, lighting setup).
+- Screenplay & Timeline Cues: Delegate to Google Gemini / Claude (dialogue beats, verbatim cues).
+
+State the "🎬 Director Delegation Matrix" clearly at the top, followed by each department's assets and JSON cues.` : '';
+
   const systemContent = `${COPILOT_SYSTEM_PROMPT}
+${orchestrationPrompt}
 
 CURRENT ACTIVE FILM CONTEXT:
 - Video Clip: ${videoName || 'Loaded clip'} (${videoDuration ? `${videoDuration.toFixed(1)}s` : 'unknown duration'})
@@ -637,11 +678,22 @@ async function callAnthropicDirect(
   messages: ChatMessage[],
   scriptText: string,
   videoDuration?: number,
-  videoName?: string
+  videoName?: string,
+  isAutoOrchestrator: boolean = true
 ): Promise<string> {
   const endpoint = 'https://api.anthropic.com/v1/messages';
 
+  const orchestrationPrompt = isAutoOrchestrator ? `
+MULTI-MODEL PRODUCTION DELEGATION DIRECTIVE:
+You are acting as the Lead AI Director orchestrating specialized AI models:
+- Sound Generation & Foley: Delegate to Google Lyria (music tempo, key, acoustic layers, audio cue timestamps).
+- Visual Keyframes & Concept Art: Delegate to Nano Banana Pro / Imagen 3 (photorealistic camera prompts, lens mm, lighting setup).
+- Screenplay & Timeline Cues: Delegate to Google Gemini / Claude (dialogue beats, verbatim cues).
+
+State the "🎬 Director Delegation Matrix" clearly at the top, followed by each department's assets and JSON cues.` : '';
+
   const systemContent = `${COPILOT_SYSTEM_PROMPT}
+${orchestrationPrompt}
 
 CURRENT ACTIVE FILM CONTEXT:
 - Video Clip: ${videoName || 'Loaded clip'} (${videoDuration ? `${videoDuration.toFixed(1)}s` : 'unknown duration'})
@@ -684,14 +736,24 @@ async function callOllamaDirect(
   ollamaUrl: string,
   model: string,
   messages: ChatMessage[],
-  scriptText: string
+  scriptText: string,
+  isAutoOrchestrator: boolean = true
 ): Promise<string> {
   const endpoint = `${ollamaUrl.replace(/\/$/, '')}/api/chat`;
+
+  const orchestrationPrompt = isAutoOrchestrator ? `
+MULTI-MODEL PRODUCTION DELEGATION DIRECTIVE:
+You are acting as the Lead AI Director orchestrating specialized AI models:
+- Sound Generation & Foley: Delegate to Google Lyria (music tempo, key, acoustic layers, audio cue timestamps).
+- Visual Keyframes & Concept Art: Delegate to Nano Banana Pro / Imagen 3 (photorealistic camera prompts, lens mm, lighting setup).
+- Screenplay & Timeline Cues: Delegate to Google Gemini / Claude (dialogue beats, verbatim cues).
+
+State the "🎬 Director Delegation Matrix" clearly at the top, followed by each department's assets and JSON cues.` : '';
 
   const payloadMessages = [
     {
       role: 'system',
-      content: `${COPILOT_SYSTEM_PROMPT}\n\nCURRENT SCRIPT:\n${scriptText}`,
+      content: `${COPILOT_SYSTEM_PROMPT}\n${orchestrationPrompt}\n\nCURRENT SCRIPT:\n${scriptText}`,
     },
     ...messages.map(m => ({ role: m.role, content: m.content })),
   ];
