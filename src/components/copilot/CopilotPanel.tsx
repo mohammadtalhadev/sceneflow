@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { 
   Bot, 
   X, 
@@ -10,17 +10,26 @@ import {
   RefreshCw, 
   Trash2, 
   ChevronDown, 
+  Search,
   CornerDownLeft,
   Wand2,
-  FileCheck
+  FileCheck,
+  Zap,
+  Cpu
 } from 'lucide-react';
 import { 
-  AVAILABLE_MODELS, 
+  getAllAvailableModels, 
   type ChatMessage, 
   sendCopilotMessage, 
   extractCopilotAction,
   getSavedModel, 
-  saveSelectedModel 
+  saveSelectedModel,
+  fetchModelsForProvider,
+  saveCustomModels,
+  getSavedCustomModels,
+  getSavedApiKeys,
+  type AIModelOption,
+  type AIProvider
 } from '../../services/aiService';
 import { ApiKeyModal } from './ApiKeyModal';
 import { cn } from '../../lib/utils';
@@ -37,6 +46,14 @@ export interface CopilotPanelProps {
   onApplyScript: (newScript: string) => void;
 }
 
+const PROVIDER_BADGES: Record<AIProvider, { label: string; colorClass: string }> = {
+  openrouter: { label: 'OpenRouter', colorClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' },
+  gemini: { label: 'Gemini', colorClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
+  openai: { label: 'OpenAI', colorClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
+  anthropic: { label: 'Anthropic', colorClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
+  ollama: { label: 'Local', colorClass: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20' },
+};
+
 export const CopilotPanel: React.FC<CopilotPanelProps> = ({
   isOpen,
   onClose,
@@ -48,8 +65,14 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
   onApplyScript,
 }) => {
   const [selectedModel, setSelectedModel] = useState<string>(() => getSavedModel());
+  const [availableModels, setAvailableModels] = useState<AIModelOption[]>(() => getAllAvailableModels());
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [modelSearch, setModelSearch] = useState('');
+  const [providerFilter, setProviderFilter] = useState<'all' | AIProvider>('all');
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [fetchMessage, setFetchMessage] = useState<string | null>(null);
+
   const [inputPrompt, setInputPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -58,13 +81,24 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
     {
       id: 'welcome',
       role: 'assistant',
-      content: `Hello Director! I am your **AI Copilot** for Seedance 2.5 filmmaking.\n\nI can:\n• **Auto-sync cues** between your video and screenplay\n• **Format Seedance 2.5 Auteur Scripts** with \`[[CAMERA_SETUP]]\` and \`[[STAGING]]\`\n• **Audit prompt fidelity** and spot missed beats\n\nWhat would you like to work on?`,
+      content: `Hello Director! I am your **AI Copilot** for Seedance 2.5 filmmaking.\n\nI can:\n• **Auto-sync cues** between your video and screenplay\n• **Format Seedance 2.5 Auteur Scripts** with \`[[CAMERA_SETUP]]\` and \`[[STAGING]]\`\n• **Audit prompt fidelity** and spot missed beats\n• **Access hundreds of models** via OpenRouter, Gemini, OpenAI, Claude, or local Ollama.\n\nWhat would you like to direct?`,
       timestamp: Date.now(),
     },
   ]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const reloadModelCatalog = useCallback(() => {
+    setAvailableModels(getAllAvailableModels());
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      reloadModelCatalog();
+    }
+  }, [isOpen, reloadModelCatalog]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -77,10 +111,80 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
     }
   }, [isOpen, messages]);
 
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsModelDropdownOpen(false);
+      }
+    };
+    if (isModelDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isModelDropdownOpen]);
+
   const handleSelectModel = (id: string) => {
     setSelectedModel(id);
     saveSelectedModel(id);
     setIsModelDropdownOpen(false);
+  };
+
+  const handleRefreshAllModels = async () => {
+    setIsFetchingModels(true);
+    setFetchMessage(null);
+    try {
+      const keys = getSavedApiKeys();
+      let totalFetched = 0;
+      let newModels: AIModelOption[] = [];
+
+      // Check OpenRouter
+      if (keys.openrouterApiKey) {
+        try {
+          const orModels = await fetchModelsForProvider('openrouter', keys.openrouterApiKey);
+          newModels = [...newModels, ...orModels];
+          totalFetched += orModels.length;
+        } catch (e: any) {
+          console.warn('OpenRouter models fetch warning:', e.message);
+        }
+      }
+
+      // Check Gemini
+      if (keys.geminiApiKey) {
+        try {
+          const gemModels = await fetchModelsForProvider('gemini', keys.geminiApiKey);
+          newModels = [...newModels, ...gemModels];
+          totalFetched += gemModels.length;
+        } catch (e: any) {
+          console.warn('Gemini models fetch warning:', e.message);
+        }
+      }
+
+      // Check Ollama
+      if (keys.ollamaUrl) {
+        try {
+          const ollamaModels = await fetchModelsForProvider('ollama', undefined, keys.ollamaUrl);
+          newModels = [...newModels, ...ollamaModels];
+          totalFetched += ollamaModels.length;
+        } catch (e: any) {}
+      }
+
+      if (newModels.length > 0) {
+        const existing = getSavedCustomModels().filter(
+          m => !newModels.some(nm => nm.id === m.id)
+        );
+        saveCustomModels([...existing, ...newModels]);
+        reloadModelCatalog();
+        setFetchMessage(`✓ Synced ${totalFetched} live models!`);
+      } else {
+        setFetchMessage('No new models found. Configure your API keys in 🔑 settings.');
+      }
+    } catch (err: any) {
+      setFetchMessage(`Fetch failed: ${err.message}`);
+    } finally {
+      setIsFetchingModels(false);
+      setTimeout(() => setFetchMessage(null), 3000);
+    }
   };
 
   const handleSendMessage = useCallback(async (textToSend?: string) => {
@@ -146,9 +250,19 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
     );
   };
 
+  const filteredModels = useMemo(() => {
+    return availableModels.filter(m => {
+      const matchesProvider = providerFilter === 'all' || m.provider === providerFilter;
+      const q = modelSearch.toLowerCase().trim();
+      const matchesQuery = !q || m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q);
+      return matchesProvider && matchesQuery;
+    });
+  }, [availableModels, providerFilter, modelSearch]);
+
   if (!isOpen) return null;
 
-  const currentModelObj = AVAILABLE_MODELS.find(m => m.id === selectedModel) || AVAILABLE_MODELS[0];
+  const currentModelObj = availableModels.find(m => m.id === selectedModel) || availableModels[0];
+  const currentBadge = PROVIDER_BADGES[currentModelObj.provider] || PROVIDER_BADGES.gemini;
 
   return (
     <>
@@ -183,7 +297,7 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
             <button
               type="button"
               onClick={() => setIsKeyModalOpen(true)}
-              title="Configure API Keys (Gemini, OpenAI, Claude, Ollama)"
+              title="Configure API Keys & Fetch Models"
               className="p-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-surface border border-transparent hover:border-border-subtle transition-colors"
             >
               <Key size={14} />
@@ -212,39 +326,132 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
         </div>
 
         {/* Model Selector Bar */}
-        <div className="relative px-3.5 py-1.5 border-b border-border-subtle bg-surface flex items-center justify-between text-xs shrink-0">
+        <div ref={dropdownRef} className="relative px-3.5 py-1.5 border-b border-border-subtle bg-surface flex items-center justify-between text-xs shrink-0">
           <div className="flex items-center gap-1.5 text-[10px] font-bold text-text-muted uppercase tracking-wider">
             <span>Model:</span>
+            <span className={cn("text-[8.5px] px-1.5 py-0.2 rounded font-mono border font-bold", currentBadge.colorClass)}>
+              {currentBadge.label}
+            </span>
           </div>
 
           <button
             type="button"
             onClick={() => setIsModelDropdownOpen(prev => !prev)}
-            className="flex items-center gap-1 px-2 py-1 rounded-md bg-surface-subtle hover:bg-surface border border-border-subtle text-[11px] font-semibold text-text-main transition-all"
+            className="flex items-center gap-1 px-2 py-1 rounded-md bg-surface-subtle hover:bg-surface border border-border-subtle text-[11px] font-semibold text-text-main transition-all max-w-[200px]"
           >
-            <span className="truncate max-w-[170px]">{currentModelObj.name}</span>
-            <ChevronDown size={11} className={cn("transition-transform", isModelDropdownOpen && "rotate-180")} />
+            <span className="truncate">{currentModelObj.name}</span>
+            <ChevronDown size={11} className={cn("transition-transform shrink-0", isModelDropdownOpen && "rotate-180")} />
           </button>
 
+          {/* Upgraded Multi-Model Dropdown Drawer */}
           {isModelDropdownOpen && (
-            <div className="absolute top-full right-3.5 mt-1 w-64 bg-surface rounded-xl shadow-2xl border border-border-main py-1 z-50 divide-y divide-border-subtle animate-in fade-in zoom-in-95 duration-100">
-              {AVAILABLE_MODELS.map(model => (
-                <button
-                  key={model.id}
-                  type="button"
-                  onClick={() => handleSelectModel(model.id)}
-                  className={cn(
-                    "w-full text-left px-3 py-2 text-[11px] transition-colors flex flex-col",
-                    model.id === selectedModel ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold" : "hover:bg-surface-subtle text-text-main"
+            <div className="absolute top-full right-2 left-2 mt-1 bg-surface rounded-xl shadow-2xl border border-border-main p-2 z-50 flex flex-col max-h-[380px] animate-in fade-in zoom-in-95 duration-100">
+              {/* Search & Actions Bar */}
+              <div className="space-y-1.5 pb-2 border-b border-border-subtle shrink-0">
+                <div className="flex items-center gap-1 bg-surface-subtle border border-border-subtle rounded-lg px-2 py-1">
+                  <Search size={11} className="text-text-muted shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="Search 200+ models (claude, deepseek, gpt-4o)..."
+                    value={modelSearch}
+                    onChange={(e) => setModelSearch(e.target.value)}
+                    className="w-full bg-transparent text-[11px] focus:outline-none font-sans"
+                    autoFocus
+                  />
+                  {modelSearch && (
+                    <button type="button" onClick={() => setModelSearch('')} className="text-text-muted hover:text-text-main">
+                      <X size={10} />
+                    </button>
                   )}
-                >
-                  <div className="flex items-center justify-between">
-                    <span>{model.name}</span>
-                    {model.id === selectedModel && <Check size={12} />}
+                </div>
+
+                {/* Provider Filter Chips & Refresh Button */}
+                <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-0.5">
+                    {(['all', 'openrouter', 'gemini', 'openai', 'ollama'] as const).map(p => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setProviderFilter(p)}
+                        className={cn(
+                          "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider transition-colors shrink-0",
+                          providerFilter === p 
+                            ? "bg-purple-600 text-white" 
+                            : "bg-surface-subtle text-text-muted hover:text-text-main"
+                        )}
+                      >
+                        {p}
+                      </button>
+                    ))}
                   </div>
-                  <span className="text-[9.5px] text-text-muted font-normal mt-0.5">{model.desc}</span>
+
+                  <button
+                    type="button"
+                    disabled={isFetchingModels}
+                    onClick={handleRefreshAllModels}
+                    title="Auto-fetch and refresh models from your configured API keys"
+                    className="p-1 rounded-md text-text-muted hover:text-purple-600 hover:bg-surface-subtle transition-colors shrink-0"
+                  >
+                    <RefreshCw size={11} className={isFetchingModels ? 'animate-spin text-purple-600' : ''} />
+                  </button>
+                </div>
+
+                {fetchMessage && (
+                  <div className="text-[9.5px] font-mono text-purple-600 dark:text-purple-400 font-bold px-1 animate-in fade-in">
+                    {fetchMessage}
+                  </div>
+                )}
+              </div>
+
+              {/* Models List */}
+              <div className="flex-1 overflow-y-auto divide-y divide-border-subtle/40 custom-scrollbar mt-1">
+                {filteredModels.length === 0 ? (
+                  <div className="py-6 text-center text-text-muted text-[11px]">
+                    No models match "{modelSearch}"
+                  </div>
+                ) : (
+                  filteredModels.map(model => {
+                    const badge = PROVIDER_BADGES[model.provider] || PROVIDER_BADGES.gemini;
+                    const isSelected = model.id === selectedModel;
+                    return (
+                      <button
+                        key={model.id}
+                        type="button"
+                        onClick={() => handleSelectModel(model.id)}
+                        className={cn(
+                          "w-full text-left px-2.5 py-1.5 text-[11px] transition-colors flex flex-col gap-0.5 rounded-lg",
+                          isSelected ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold" : "hover:bg-surface-subtle text-text-main"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="truncate font-semibold">{model.name}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className={cn("text-[8px] px-1 py-0.2 rounded font-mono border font-bold", badge.colorClass)}>
+                              {badge.label}
+                            </span>
+                            {isSelected && <Check size={12} className="text-purple-600 dark:text-purple-400" />}
+                          </div>
+                        </div>
+                        <span className="text-[9.5px] text-text-muted font-normal line-clamp-1">
+                          {model.desc}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Footer info */}
+              <div className="pt-1.5 border-t border-border-subtle text-[9px] text-text-muted flex items-center justify-between px-1 shrink-0">
+                <span>{filteredModels.length} models available</span>
+                <button 
+                  type="button" 
+                  onClick={() => { setIsModelDropdownOpen(false); setIsKeyModalOpen(true); }}
+                  className="text-purple-500 hover:underline font-bold"
+                >
+                  Manage Keys 🔑
                 </button>
-              ))}
+              </div>
             </div>
           )}
         </div>
@@ -277,7 +484,7 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
                 className={cn(
                   "p-3 rounded-2xl max-w-[92%] leading-relaxed break-words shadow-2xs select-text",
                   msg.role === 'user'
-                    ? "bg-blue-600 text-white rounded-br-xs"
+                    ? "bg-purple-600 text-white rounded-br-xs"
                     : "bg-surface-subtle border border-border-subtle text-text-main rounded-bl-xs"
                 )}
               >
@@ -299,7 +506,7 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
                         "px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all flex items-center gap-1 shadow-2xs",
                         msg.action.isApplied
                           ? "bg-green-500/10 text-green-600 border border-green-500/20 cursor-default"
-                          : "bg-blue-500 hover:bg-blue-600 text-white active:scale-95 cursor-pointer"
+                          : "bg-purple-600 hover:bg-purple-700 text-white active:scale-95 cursor-pointer"
                       )}
                     >
                       {msg.action.isApplied ? (
@@ -319,96 +526,90 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
           ))}
 
           {isLoading && (
-            <div className="flex items-center gap-2 p-3 rounded-2xl bg-surface-subtle border border-border-subtle text-text-muted text-xs max-w-[80%] animate-pulse">
-              <RefreshCw size={13} className="animate-spin text-blue-500" />
-              <span>Analyzing script & video sync...</span>
+            <div className="flex items-center gap-2 text-text-muted text-[11px] p-2 animate-pulse">
+              <RefreshCw size={13} className="animate-spin text-purple-500" />
+              <span>Directing scene with {currentModelObj.name}...</span>
             </div>
           )}
 
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex flex-col gap-1">
-              <span className="font-bold">Execution Error</span>
-              <span>{errorMsg}</span>
-              <button
-                type="button"
-                onClick={() => setIsKeyModalOpen(true)}
-                className="text-[10px] underline font-bold mt-1 text-left"
-              >
-                Open API Keys Settings ➔
-              </button>
+            <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-[11px] space-y-1">
+              <p className="font-bold">Execution Error</p>
+              <p>{errorMsg}</p>
             </div>
           )}
 
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick Suggestion Chips */}
-        <div className="px-3 py-1.5 bg-surface-subtle border-t border-border-subtle flex items-center gap-1.5 overflow-x-auto custom-scrollbar shrink-0">
+        {/* Quick Action Suggestion Chips */}
+        <div className="px-3 py-1.5 border-t border-border-subtle bg-surface flex items-center gap-1.5 overflow-x-auto scrollbar-hide shrink-0 text-[10px]">
           <button
             type="button"
-            onClick={() => handleSendMessage("Sync this screenplay with the video timestamps and extract all 8 cue categories.")}
-            className="px-2 py-0.5 rounded-full bg-surface hover:bg-surface-muted border border-border-subtle text-[9.5px] font-bold text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
+            onClick={() => handleSendMessage('Suggest and generate timing cues for the active scene.')}
+            className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
           >
-            🎯 Auto-Sync Cues
+            🎬 Sync Cues
           </button>
           <button
             type="button"
-            onClick={() => handleSendMessage("Format this scene into a Seedance 2.5 Auteur Script with [[CAMERA_SETUP]], [[STAGING]], and [<BRIEF>] directives.")}
-            className="px-2 py-0.5 rounded-full bg-surface hover:bg-surface-muted border border-border-subtle text-[9.5px] font-bold text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
+            onClick={() => handleSendMessage('Enhance dialogue pacing and subtext in this screenplay.')}
+            className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
           >
-            🎬 Seedance Script
+            🎭 Polish Dialogue
           </button>
           <button
             type="button"
-            onClick={() => handleSendMessage("Audit prompt adherence: What instructions or camera motions did Seedance fail to execute in this clip?")}
-            className="px-2 py-0.5 rounded-full bg-surface hover:bg-surface-muted border border-border-subtle text-[9.5px] font-bold text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
+            onClick={() => handleSendMessage('Break down this scene into ByteDance Seedance 2.5 Auteur [[STAGING]] and [[CAMERA_SETUP]].')}
+            className="px-2 py-1 rounded-lg bg-surface-subtle hover:bg-surface border border-border-subtle text-text-muted hover:text-text-main whitespace-nowrap transition-colors"
           >
-            🔍 Audit Fidelity
+            📐 Seedance Blocking
           </button>
         </div>
 
         {/* Input Bar */}
-        <div className="p-3 border-t border-border-subtle bg-surface shrink-0">
-          <div className="relative flex items-end bg-surface-subtle border border-border-main rounded-2xl p-1.5 focus-within:border-blue-500 transition-colors">
-            <textarea
-              ref={textareaRef}
-              rows={2}
-              value={inputPrompt}
-              onChange={(e) => setInputPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder="Ask Copilot (e.g. 'Sync this video', 'Add camera cues')..."
-              className="w-full px-2.5 py-1 bg-transparent text-xs text-text-main placeholder-text-muted resize-none focus:outline-none"
-            />
+        <div className="p-3 border-t border-border-main bg-surface-subtle shrink-0">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendMessage();
+            }}
+            className="flex items-end gap-2"
+          >
+            <div className="flex-1 bg-surface border border-border-main rounded-xl p-2 focus-within:border-purple-500 transition-colors shadow-2xs">
+              <textarea
+                ref={textareaRef}
+                rows={2}
+                placeholder="Ask AI Director (e.g. 'Draft audio and camera cues for this beat')..."
+                value={inputPrompt}
+                onChange={(e) => setInputPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                className="w-full bg-transparent resize-none focus:outline-none text-xs text-text-main placeholder:text-text-faint custom-scrollbar leading-relaxed"
+              />
+            </div>
+
             <button
-              type="button"
+              type="submit"
               disabled={isLoading || !inputPrompt.trim()}
-              onClick={() => handleSendMessage()}
-              className={cn(
-                "p-2 rounded-xl transition-all shrink-0 flex items-center justify-center",
-                inputPrompt.trim() && !isLoading
-                  ? "bg-blue-500 hover:bg-blue-600 text-white shadow-xs"
-                  : "text-text-muted opacity-40 cursor-not-allowed"
-              )}
+              className="p-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white font-bold transition-all shadow-xs active:scale-95 cursor-pointer shrink-0"
+              title="Send message (Enter)"
             >
-              <Send size={13} />
+              <Send size={15} />
             </button>
-          </div>
-          <div className="flex items-center justify-between mt-1 px-1 text-[9px] text-text-muted">
-            <span>Press Enter to send, Shift+Enter for new line</span>
-            <span className="font-mono">Local & Private</span>
-          </div>
+          </form>
         </div>
       </aside>
 
-      {/* API Key Modal */}
+      {/* Keys & Models Modal */}
       <ApiKeyModal
         isOpen={isKeyModalOpen}
         onClose={() => setIsKeyModalOpen(false)}
+        onModelsUpdated={reloadModelCatalog}
       />
     </>
   );
