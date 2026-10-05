@@ -1,5 +1,7 @@
 import type { Cue } from '../types/script';
+import type { VideoKeyframe } from './videoVisionService';
 
+export type { VideoKeyframe };
 export type AIProvider = 'openrouter' | 'gemini' | 'openai' | 'anthropic' | 'ollama';
 
 export interface AIModelOption {
@@ -685,7 +687,8 @@ export async function sendCopilotMessage({
   videoDuration,
   videoName,
   currentCues,
-  isAutoOrchestrator = true,
+  isAutoOrchestrator = false,
+  videoKeyframes,
 }: {
   messages: ChatMessage[];
   modelId: string;
@@ -694,6 +697,7 @@ export async function sendCopilotMessage({
   videoName?: string;
   currentCues?: Cue[];
   isAutoOrchestrator?: boolean;
+  videoKeyframes?: VideoKeyframe[];
 }): Promise<string> {
   const allModels = getAllAvailableModels();
   const modelConfig = allModels.find(m => m.id === modelId) || allModels[0];
@@ -704,21 +708,21 @@ export async function sendCopilotMessage({
     if (targetModel.provider === 'openrouter' || targetModel.id.startsWith('openrouter/')) {
       const key = keys.openrouterApiKey;
       if (!key) throw new Error('Please configure your OpenRouter API key in Copilot Settings (click 🔑).');
-      return callOpenRouterDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+      return callOpenRouterDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator, videoKeyframes);
     }
 
     // 2. Google Gemini Direct
     if (targetModel.provider === 'gemini') {
       const key = keys.geminiApiKey;
       if (!key) throw new Error('Please configure your Google Gemini API key in Copilot Settings (click 🔑).');
-      return callGeminiDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+      return callGeminiDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator, videoKeyframes);
     }
 
     // 3. OpenAI Direct
     if (targetModel.provider === 'openai') {
       const key = keys.openaiApiKey;
       if (!key) throw new Error('Please configure your OpenAI API key in Copilot Settings (click 🔑).');
-      return callOpenAIDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+      return callOpenAIDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator, videoKeyframes);
     }
 
     // 4. Anthropic Claude Direct
@@ -726,11 +730,11 @@ export async function sendCopilotMessage({
       const key = keys.anthropicApiKey;
       if (!key) {
         if (keys.openrouterApiKey) {
-          return callOpenRouterDirect(keys.openrouterApiKey, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+          return callOpenRouterDirect(keys.openrouterApiKey, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator, videoKeyframes);
         }
         throw new Error('Please configure your Anthropic or OpenRouter API key in Copilot Settings (click 🔑).');
       }
-      return callAnthropicDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+      return callAnthropicDirect(key, targetModel, messages, scriptText, videoDuration, videoName, isAutoOrchestrator, videoKeyframes);
     }
 
     // 5. Ollama Local
@@ -764,7 +768,8 @@ async function callOpenRouterDirect(
   scriptText: string,
   videoDuration?: number,
   videoName?: string,
-  isAutoOrchestrator: boolean = true
+  isAutoOrchestrator: boolean = false,
+  videoKeyframes?: VideoKeyframe[]
 ): Promise<string> {
   const cleanModelId = modelConfig.id.replace(/^openrouter\//, '');
   const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
@@ -773,14 +778,28 @@ async function callOpenRouterDirect(
 
   const payloadMessages = [
     { role: 'system', content: systemContent },
-    ...messages.map(m => {
-      if (m.imageUrl) {
+    ...messages.map((m, idx) => {
+      const isLastUser = idx === messages.length - 1 && m.role === 'user';
+      if (m.imageUrl || (isLastUser && videoKeyframes && videoKeyframes.length > 0)) {
+        const contentParts: any[] = [{ type: 'text', text: m.content }];
+        if (m.imageUrl) {
+          contentParts.push({ type: 'image_url', image_url: { url: m.imageUrl } });
+        }
+        if (isLastUser && videoKeyframes) {
+          contentParts.push({
+            type: 'text',
+            text: `\n[SENSORY INPUT: ${videoKeyframes.length} REAL FRAMES CAPTURED FROM VIDEO "${videoName || 'Loaded Video'}"]`
+          });
+          for (const kf of videoKeyframes) {
+            contentParts.push({
+              type: 'image_url',
+              image_url: { url: kf.dataUrl }
+            });
+          }
+        }
         return {
           role: m.role,
-          content: [
-            { type: 'text', text: m.content },
-            { type: 'image_url', image_url: { url: m.imageUrl } },
-          ],
+          content: contentParts,
         };
       }
       return { role: m.role, content: m.content };
@@ -825,7 +844,8 @@ async function callGeminiDirect(
   scriptText: string,
   videoDuration?: number,
   videoName?: string,
-  isAutoOrchestrator: boolean = true
+  isAutoOrchestrator: boolean = false,
+  videoKeyframes?: VideoKeyframe[]
 ): Promise<string> {
   const cleanModelId = modelConfig.id.replace(/^models\//, '');
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModelId}:generateContent?key=${apiKey}`;
@@ -837,7 +857,7 @@ async function callGeminiDirect(
       role: 'user',
       parts: [{ text: systemContent }],
     },
-    ...messages.map(m => {
+    ...messages.map((m, idx) => {
       const parts: any[] = [{ text: m.content }];
       if (m.imageUrl) {
         const base64Data = m.imageUrl.includes(',') ? m.imageUrl.split(',')[1] : m.imageUrl;
@@ -848,6 +868,35 @@ async function callGeminiDirect(
           },
         });
       }
+
+      // If last user message and videoKeyframes are provided, inject actual frames
+      if (idx === messages.length - 1 && m.role === 'user' && videoKeyframes && videoKeyframes.length > 0) {
+        parts.push({
+          text: `\n\n[DIRECTOR SENSORY VISION: ${videoKeyframes.length} REAL FRAMES CAPTURED ACROSS THE TIMELINE FROM VIDEO "${videoName || 'Loaded Video'}" (${videoDuration ? `${videoDuration.toFixed(1)}s` : ''})]\n` +
+                `You have true multimodal visual perception. Inspect each frame image below with full optical scrutiny (examine characters, dragons, armor, costumes, environments, on-screen titles, burned-in subtitles, blocking, and VFX):\n`
+        });
+
+        for (const kf of videoKeyframes) {
+          const kfBase64 = kf.dataUrl.includes(',') ? kf.dataUrl.split(',')[1] : kf.dataUrl;
+          parts.push({
+            text: `[KEYFRAME @ ${kf.time.toFixed(1)}s - ${kf.label}]`
+          });
+          parts.push({
+            inlineData: {
+              mimeType: 'image/jpeg',
+              data: kfBase64,
+            }
+          });
+        }
+
+        parts.push({
+          text: `\n[MANDATORY THREE-PHASE VISUAL & SCRIPT AUDIT PROTOCOL]:\n` +
+                `1. 🎬 PHASE 1: FRAME-BY-FRAME VISUAL AUDIT - Analyze and extract the actual visual events, characters, creatures (e.g. dragons), armor/costumes, environments, on-screen titles, burned-in subtitles/dialogue, camera setups, and physical blocking.\n` +
+                `2. ⚖️ PHASE 2: SCRIPT COMPARISON & CONTINUITY AUDIT - Compare what actually occurs in the video frames against the screenplay text in the editor. State what matches, what was unscripted, and call out any discrepancies or hallucinations in the script.\n` +
+                `3. 📜 PHASE 3: CANONICAL OUTPUT FORMATS - Output both Format 1 (Auteur Script Breakdown with Editing Rhythm, Continuity Bible Locks, Frame-by-Frame Shot Breakdown, Flow Protocol) and Format 2 (AI Generation Prompts S1..S10 + Director's Note). Provide timeline cues in a JSON action block so the director can 1-click sync to timeline!`
+        });
+      }
+
       return {
         role: m.role === 'assistant' ? 'model' : 'user',
         parts,
@@ -889,7 +938,8 @@ async function callOpenAIDirect(
   scriptText: string,
   videoDuration?: number,
   videoName?: string,
-  isAutoOrchestrator: boolean = true
+  isAutoOrchestrator: boolean = false,
+  videoKeyframes?: VideoKeyframe[]
 ): Promise<string> {
   const endpoint = 'https://api.openai.com/v1/chat/completions';
 
@@ -897,14 +947,28 @@ async function callOpenAIDirect(
 
   const payloadMessages = [
     { role: 'system', content: systemContent },
-    ...messages.map(m => {
-      if (m.imageUrl) {
+    ...messages.map((m, idx) => {
+      const isLastUser = idx === messages.length - 1 && m.role === 'user';
+      if (m.imageUrl || (isLastUser && videoKeyframes && videoKeyframes.length > 0)) {
+        const contentParts: any[] = [{ type: 'text', text: m.content }];
+        if (m.imageUrl) {
+          contentParts.push({ type: 'image_url', image_url: { url: m.imageUrl } });
+        }
+        if (isLastUser && videoKeyframes) {
+          contentParts.push({
+            type: 'text',
+            text: `\n[SENSORY INPUT: ${videoKeyframes.length} REAL FRAMES EXTRACTED FROM VIDEO "${videoName || 'Loaded Video'}"]`
+          });
+          for (const kf of videoKeyframes) {
+            contentParts.push({
+              type: 'image_url',
+              image_url: { url: kf.dataUrl }
+            });
+          }
+        }
         return {
           role: m.role,
-          content: [
-            { type: 'text', text: m.content },
-            { type: 'image_url', image_url: { url: m.imageUrl } },
-          ],
+          content: contentParts,
         };
       }
       return { role: m.role, content: m.content };
@@ -943,28 +1007,48 @@ async function callAnthropicDirect(
   scriptText: string,
   videoDuration?: number,
   videoName?: string,
-  isAutoOrchestrator: boolean = true
+  isAutoOrchestrator: boolean = false,
+  videoKeyframes?: VideoKeyframe[]
 ): Promise<string> {
   const endpoint = 'https://api.anthropic.com/v1/messages';
 
   const systemContent = buildRuntimeSystemPrompt(modelConfig, isAutoOrchestrator, videoName, videoDuration, scriptText);
 
-  const payloadMessages = messages.map(m => {
-    if (m.imageUrl) {
-      const base64Data = m.imageUrl.includes(',') ? m.imageUrl.split(',')[1] : m.imageUrl;
-      return {
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: [
-          {
+  const payloadMessages = messages.map((m, idx) => {
+    const isLastUser = idx === messages.length - 1 && m.role === 'user';
+    if (m.imageUrl || (isLastUser && videoKeyframes && videoKeyframes.length > 0)) {
+      const contentParts: any[] = [{ type: 'text', text: m.content }];
+      if (m.imageUrl) {
+        const base64Data = m.imageUrl.includes(',') ? m.imageUrl.split(',')[1] : m.imageUrl;
+        contentParts.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: m.imageMimeType || 'image/jpeg',
+            data: base64Data,
+          },
+        });
+      }
+      if (isLastUser && videoKeyframes) {
+        contentParts.push({
+          type: 'text',
+          text: `\n[SENSORY INPUT: ${videoKeyframes.length} REAL FRAMES EXTRACTED FROM VIDEO "${videoName || 'Loaded Video'}"]`
+        });
+        for (const kf of videoKeyframes) {
+          const kfBase64 = kf.dataUrl.includes(',') ? kf.dataUrl.split(',')[1] : kf.dataUrl;
+          contentParts.push({
             type: 'image',
             source: {
               type: 'base64',
-              media_type: m.imageMimeType || 'image/jpeg',
-              data: base64Data,
+              media_type: 'image/jpeg',
+              data: kfBase64,
             },
-          },
-          { type: 'text', text: m.content },
-        ],
+          });
+        }
+      }
+      return {
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: contentParts,
       };
     }
     return {

@@ -44,6 +44,10 @@ import {
   type AIModelOption,
   type AIProvider
 } from '../../services/aiService';
+import { 
+  captureVideoKeyframes, 
+  type VideoKeyframe 
+} from '../../services/videoVisionService';
 import { ApiKeyModal } from './ApiKeyModal';
 import { cn } from '../../lib/utils';
 import type { Cue } from '../../types/script';
@@ -58,6 +62,7 @@ export interface CopilotPanelProps {
   onApplyCues: (newCues: Cue[]) => void;
   onApplyScript: (newScript: string) => void;
   onSwitchToScript?: () => void;
+  html5VideoRef?: React.RefObject<HTMLVideoElement | null>;
 }
 
 const PROVIDER_BADGES: Record<AIProvider, { label: string; colorClass: string }> = {
@@ -78,10 +83,14 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
   onApplyCues,
   onApplyScript,
   onSwitchToScript,
+  html5VideoRef,
 }) => {
   const [selectedModel, setSelectedModel] = useState<string>(() => getSavedModel());
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>(() => getAllAvailableModels());
   const [isAutoOrchestrator, setIsAutoOrchestrator] = useState<boolean>(false);
+  const [isScanningVideo, setIsScanningVideo] = useState<boolean>(false);
+  const [scanProgress, setScanProgress] = useState<{ current: number; total: number; message: string } | null>(null);
+  const [capturedKeyframes, setCapturedKeyframes] = useState<VideoKeyframe[]>([]);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState('');
@@ -304,6 +313,95 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
     reader.readAsDataURL(file);
   };
 
+  const handleScanVideoAndAudit = async () => {
+    if (isScanningVideo || isLoading) return;
+
+    const videoEl = html5VideoRef?.current;
+    if (!videoEl) {
+      setErrorMsg("No active video element found. Please load an MP4 video in SceneFlow player first.");
+      return;
+    }
+
+    if (!videoEl.duration || isNaN(videoEl.duration) || videoEl.duration <= 0) {
+      setErrorMsg("Video duration is not ready yet. Please ensure the video is loaded and ready in the player.");
+      return;
+    }
+
+    setIsScanningVideo(true);
+    setErrorMsg(null);
+    setScanProgress({ current: 0, total: 8, message: "Initializing optical frame scanner..." });
+
+    try {
+      const keyframes = await captureVideoKeyframes(videoEl, 8, (current, total) => {
+        const pct = Math.round((current / total) * 100);
+        setScanProgress({ current, total, message: `Extracting keyframe ${current} of ${total} (${pct}%)...` });
+      });
+
+      if (!keyframes || keyframes.length === 0) {
+        throw new Error("Unable to capture video keyframes. Ensure the video is loaded and can play in the browser.");
+      }
+
+      setCapturedKeyframes(keyframes);
+      setScanProgress(null);
+      setIsScanningVideo(false);
+
+      const auditPrompt = `Perform a frame-by-frame visual audit of this video and compare it strictly with the current screenplay script.
+
+1. FIRST: Extract everything frame-by-frame from these captured video keyframes (characters, creatures/dragons, costumes/armor, environment, lighting, on-screen titles, burned-in subtitles, and actor blocking).
+2. SECOND: Compare the extracted video reality with the screenplay text:
+   - Identify which scenes and lines directly match
+   - Identify unscripted visual beats or character actions present in the video but missing in the screenplay
+   - Flag any script lines or cues that do not exist in the video
+3. THIRD: Output in the canonical dual formats:
+   - FORMAT 1: Auteur Script Breakdown (with Editing Rhythm, CONTINUITY BIBLE UPDATES, FRAME-BY-FRAME SHOT BREAKDOWN, and FLOW PROTOCOL)
+   - FORMAT 2: AI Generation Prompts (AI GENERATION PROMPTS S1..S10 + Director's Note)
+   - Include a 1-click timeline cues synchronization or script update action.`;
+
+      const userMessage: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: `[🎬 Video Vision Scan: 8 Keyframes Extracted (${keyframes.map(k => `${k.time.toFixed(1)}s`).join(', ')})]\n\n${auditPrompt}`,
+        timestamp: Date.now(),
+        imageUrl: keyframes[0]?.dataUrl,
+        imageName: `${videoName || 'video'}_keyframe_grid.jpg`,
+      };
+
+      const newHistory = [...messages, userMessage];
+      setMessages(newHistory);
+      setIsLoading(true);
+
+      const reply = await sendCopilotMessage({
+        messages: newHistory,
+        modelId: selectedModel,
+        scriptText,
+        videoDuration: videoDuration || videoEl.duration,
+        videoName,
+        currentCues: cues,
+        isAutoOrchestrator: false,
+        videoKeyframes: keyframes,
+      });
+
+      const action = extractCopilotAction(reply);
+
+      const assistantMessage: ChatMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: reply,
+        timestamp: Date.now(),
+        action: action ? { ...action, isApplied: false } : undefined,
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (err: any) {
+      console.error("Frame scan failed:", err);
+      setErrorMsg(`Video frame extraction failed: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+      setIsScanningVideo(false);
+      setScanProgress(null);
+    }
+  };
+
   const handleSendMessage = useCallback(async (textToSend?: string) => {
     const text = (textToSend || inputPrompt).trim();
     if ((!text && !attachedImage) || isLoading) return;
@@ -313,6 +411,26 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
     setInputPrompt('');
     setAttachedImage(null);
     if (imageInputRef.current) imageInputRef.current.value = '';
+
+    // If user's prompt requests frame extraction or video analysis, automatically capture keyframes if not already present
+    let framesToUse = capturedKeyframes;
+    const isFrameAnalysisIntent = /(extract|frame|video analysis|analyze video|audit.*video|scan.*video|compare.*script|video reality|ground truth)/i.test(text);
+
+    if (framesToUse.length === 0 && isFrameAnalysisIntent && html5VideoRef?.current) {
+      try {
+        setIsScanningVideo(true);
+        setScanProgress({ current: 0, total: 8, message: "Extracting video frames for analysis..." });
+        framesToUse = await captureVideoKeyframes(html5VideoRef.current, 8, (current, total) => {
+          setScanProgress({ current, total, message: `Extracting keyframe ${current} of ${total}...` });
+        });
+        setCapturedKeyframes(framesToUse);
+      } catch (e) {
+        console.warn("Auto frame extraction fallback warning:", e);
+      } finally {
+        setIsScanningVideo(false);
+        setScanProgress(null);
+      }
+    }
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -337,6 +455,7 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
         videoName,
         currentCues: cues,
         isAutoOrchestrator,
+        videoKeyframes: framesToUse.length > 0 ? framesToUse : undefined,
       });
 
       const action = extractCopilotAction(reply);
@@ -355,7 +474,7 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
     } finally {
       setIsLoading(false);
     }
-  }, [inputPrompt, attachedImage, isLoading, messages, selectedModel, scriptText, videoDuration, videoName, cues, isAutoOrchestrator]);
+  }, [inputPrompt, attachedImage, isLoading, messages, selectedModel, scriptText, videoDuration, videoName, cues, isAutoOrchestrator, capturedKeyframes, html5VideoRef]);
 
   const handleSwitchAndRetry = (newModelId: string) => {
     setSelectedModel(newModelId);
@@ -741,6 +860,107 @@ What would you like to direct?`,
           </span>
         </div>
 
+        {/* Video Vision Status & 1-Click Frame Extraction Action Bar */}
+        <div className="px-3.5 py-1.5 bg-gradient-to-r from-purple-950/30 to-blue-950/30 border-b border-border-subtle flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 truncate">
+            <span className={cn(
+              "w-2 h-2 rounded-full shrink-0",
+              (videoName || html5VideoRef?.current) ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
+            )} />
+            <span className="text-[10px] font-bold text-text-main truncate">
+              {videoName ? videoName : (html5VideoRef?.current ? 'Player Video Ready' : 'No Video Loaded')}
+            </span>
+            {videoDuration > 0 && (
+              <span className="text-[9px] font-mono text-text-muted">
+                ({videoDuration.toFixed(1)}s)
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={isScanningVideo || isLoading}
+            onClick={handleScanVideoAndAudit}
+            className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 cursor-pointer shrink-0"
+            title="Extract 8 actual video keyframes via HTML5 Canvas and compare with screenplay"
+          >
+            {isScanningVideo ? (
+              <>
+                <RefreshCw size={11} className="animate-spin" />
+                <span>Scanning...</span>
+              </>
+            ) : (
+              <>
+                <Eye size={12} />
+                <span>Scan Frames & Audit</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Video Frame Scanning Progress Bar */}
+        {isScanningVideo && scanProgress && (
+          <div className="px-3.5 py-2 bg-purple-500/10 border-b border-purple-500/25 space-y-1.5 shrink-0 animate-in fade-in">
+            <div className="flex items-center justify-between text-[10px] font-bold text-purple-600 dark:text-purple-300">
+              <span className="flex items-center gap-1.5 truncate">
+                <RefreshCw size={11} className="animate-spin text-purple-500 shrink-0" />
+                <span className="truncate">{scanProgress.message}</span>
+              </span>
+              <span className="text-[9.5px] font-mono ml-2 shrink-0">
+                {Math.round((scanProgress.current / scanProgress.total) * 100)}%
+              </span>
+            </div>
+            <div className="w-full bg-purple-500/20 h-1.5 rounded-full overflow-hidden">
+              <div 
+                className="bg-purple-600 h-full transition-all duration-200"
+                style={{ width: `${Math.round((scanProgress.current / scanProgress.total) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Captured Keyframes Preview Strip */}
+        {capturedKeyframes.length > 0 && !isScanningVideo && (
+          <div className="px-3.5 py-1.5 bg-surface-subtle border-b border-border-subtle shrink-0">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5 text-[9.5px] font-bold text-text-main">
+                <Eye size={11} className="text-purple-500" />
+                <span>{capturedKeyframes.length} Real Video Frames In Memory</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleScanVideoAndAudit}
+                  className="text-[9px] font-semibold text-purple-600 hover:text-purple-500 cursor-pointer"
+                >
+                  Re-scan
+                </button>
+                <span className="text-border-main text-[9px]">•</span>
+                <button
+                  type="button"
+                  onClick={() => setCapturedKeyframes([])}
+                  className="text-[9px] font-semibold text-text-muted hover:text-red-500 cursor-pointer"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+              {capturedKeyframes.map((kf, i) => (
+                <div key={i} className="relative group shrink-0">
+                  <img
+                    src={kf.dataUrl}
+                    alt={kf.label}
+                    className="w-14 h-9 object-cover rounded border border-border-subtle group-hover:border-purple-500 transition-colors"
+                  />
+                  <span className="absolute bottom-0.5 right-0.5 text-[7.5px] font-mono px-0.5 bg-black/80 text-white rounded font-bold">
+                    {kf.time.toFixed(1)}s
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Messages Body */}
         <div className="flex-1 overflow-y-auto p-3.5 space-y-3 custom-scrollbar text-xs">
           {messages.map((msg) => (
@@ -981,8 +1201,16 @@ What would you like to direct?`,
         <div className="px-3 py-1.5 border-t border-border-subtle bg-surface flex items-center gap-1.5 overflow-x-auto scrollbar-hide shrink-0 text-[10px]">
           <button
             type="button"
+            disabled={isScanningVideo || isLoading}
+            onClick={handleScanVideoAndAudit}
+            className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 whitespace-nowrap transition-all font-black flex items-center gap-1 shadow-2xs cursor-pointer shrink-0"
+          >
+            <Eye size={11} /> 👁️ Scan Frames & Compare Script
+          </button>
+          <button
+            type="button"
             onClick={() => handleSendMessage('Run full Film Autopilot: break down screenplay into frame-accurate camera setups, Google Lyria audio and sound design, and photorealistic Nano Banana visual prompts ready for 1-click timeline sync.')}
-            className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 whitespace-nowrap transition-all font-black flex items-center gap-1 shadow-2xs cursor-pointer"
+            className="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 whitespace-nowrap transition-all font-bold flex items-center gap-1 cursor-pointer shrink-0"
           >
             <Sparkles size={11} /> 🚀 Run Film Autopilot
           </button>

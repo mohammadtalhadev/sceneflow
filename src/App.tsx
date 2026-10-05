@@ -1121,6 +1121,7 @@ export default function App() {
           onApplyCues={handleApplyCopilotCues}
           onApplyScript={handleApplyCopilotScript}
           onSwitchToScript={handleToggleScriptVisible}
+          html5VideoRef={html5VideoRef}
         />
       </main>
     </CueEditorProvider>
