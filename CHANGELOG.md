@@ -1,0 +1,941 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- **Three Years Late [AI Scenes] Example (`scene_three_years_late`, `src/examples.ts`, `SCENEFLOW_CATALOGUE.md`)**:
+  - Added new sample project `scene_three_years_late.json` featuring a 4-part ensemble drama set at Cabo da Roca with 35mm aesthetic and Seedance 2.5 cue mappings synchronized to YouTube playback.
+  - Registered 'Three Years Late' under **AI Scenes** in `src/examples.ts` as a featured project and updated `SCENEFLOW_CATALOGUE.md`.
+
+## [2.5.1] - 2026-09-24
+
+### Fixed
+- **Edit Mode Text Selection Registration & Trailing Click Shielding (`src/App.tsx`, `src/hooks/useCueEditor.ts`, `src/components/script/ScriptLine.tsx`, `src/lib/cueUtils.ts`)**:
+  - **Trailing Click Shielding (`justSelectedRef`)**: Resolved an issue where selecting text on a single line in Edit Mode immediately vanished without displaying the cue draft. When React re-rendered `ScriptLine` to insert `<span className="cueTemp">`, the native DOM selection range collapsed before the trailing browser `click` event fired, causing `handleScriptClick` to falsely evaluate `!isDirty` and cancel the draft. Added a single-use `justSelectedRef` flag to shield newly created selections and double-click word captures.
+  - **Drag Displacement Tracking (`mouseDownPosRef`)**: Added mouse drag displacement tracking on `scriptRef` with a calibrated 4px movement threshold, ensuring drag gestures are never misinterpreted as stationary background dismiss clicks. Self-resetting ref hygiene (`mouseDownPosRef.current = null`) prevents coordinate leakage across clicks.
+  - **Synchronous Selection Capture Signal (`useCueEditor.ts`)**: Updated `handleSelection` to return a `boolean` confirming when a non-empty selection has been successfully captured and applied to state.
+  - **Active Selection Shielding on Existing Cues (`ScriptLine.tsx`)**: In `ScriptLineComponent`, guarded cue span `onClick` handlers against active native text drag selections, preventing accidental invocation of `onSelectCue` when dragging across text that already contains a cue.
+  - **Bounded Full-Line Search Windowing (`cueUtils.ts`)**: Enhanced `getSelectionIndicesFromDOM` to read `data-line-end` attributes from line containers, dynamically expanding local search windows across formatted lines of any length.
+  - **Refactoring & Investigation Invariants (`.agents/rules/`)**: Codified Section 5 (Native Event Lifecycle & Trailing Click Shielding on Interactive Containers) and Section 6 (Investigation Discipline: Codebase Evaluation Before Browser Subagents) in `refactoring-and-performance-invariants.md`.
+
+### Added
+- **Reference Documentation Suite (`docs/articles/`)**:
+  - **SceneFlow Launch Publication (`docs/articles/sceneflow-script-to-screen.md`)**: Local reference copy of the author's official Substack publication (*"Introducing SceneFlow: Script-to-Screen Synchronization"* on *Grounded Hallucinations*), detailing the dual-pane synchronized playback engine, 8-category color spectrum, adapted screenplay layout, in-browser cue alignment editor, and library catalogue.
+  - **Auteur Script Framework Reference (`docs/articles/auteur_script/index.md`)**: Foundational reference documentation for the Auteur Script prompt specification, covering two-phase production staging (Staging $S_0$ vs. Execution $S_1 \dots S_n$), single-dimension orthogonality rules, and three production video showcases.
+  - **Auteur Script Conceptual Model & State Grammar (`docs/articles/auteur_script/conceptual_model.md`)**: Theoretical reference specification detailing state vector formulation ($S_n = \langle s_{\text{camera}}, s_{\text{action}}, s_{\text{audio}}, \dots \rangle$), recursive staging equations ($S_n = f(S_{n-1} \mid \text{STAGING})$), camera persistence, physical baggage inheritance, and dual pre-visualization / diagnostic workflows.
+
+## [2.5.0] - 2026-09-16
+
+### Added
+- **Studio Script Editor with Collapsible Outline, Soft Word-Wrap, Formatting Guide & Single-Tier Toolbar (`src/components/RawScriptModal.tsx`, `src/components/raw-script/*`)**:
+  - **Collapsible Hierarchical Script Outline (`useScriptOutline.ts`, `ScriptOutlineSidebar.tsx`)**: 4-rank stack parser that organizes scripts by `PART`, Roman numeral acts (`I. ...`), scene headings (`INT./EXT.`), staging containers, brief execution blocks, and directive tags. Includes per-section item count pills, chevron toggles, and unified "Collapse All / Expand All" controls. Clicking any outline node automatically unfolds any collapsed ancestors and smooth-scrolls the caret directly to the target line.
+  - **Soft Word-Wrap with Pixel-Perfect Gutter Alignment (`useWordWrap.ts`, `ScriptEditorCanvas.tsx`)**: Toggleable via `[ Wrap ]` or <kbd>Alt+Z</kbd>. Utilizes an off-screen measurement mirror container (`lineHeights`) with identical monospace font and padding metrics to compute exact rendered line heights, maintaining 1:1 pixel alignment between line numbers and wrapped text rows with zero vertical drift during deep scrolling.
+  - **Searchable Formatting Guide Sidebar (`ScriptFormattingGuide.tsx`)**: Integrated right-hand cheat sheet (`[ Guide ]` toggle) with live search and category filtering (`Structure`, `Directives`, `Dialogue`, `Effects`). Provides 1-click **Insert** and **Copy** snippets alongside live visual preview badges that mirror SceneFlow's screenplay rendering engine.
+  - **Single-Tier Streamlined Toolbar (`ScriptEditorToolbar.tsx`)**: Streamlined into a single 40px row (`h-10`, `flex-nowrap overflow-x-auto`) that permanently eliminates awkward two-tier button wrapping. Features a segmented view switcher (`Outline`, `Wrap`, `Guide`), container wrapping buttons (`[[STAGING]]`, `[<BRIEF>]`), core directive presets (`INTENT`, `LOGIC`, `AESTHETIC`, `OPENING`), persistent custom directive tags with removal pips, custom tag creator modal, and right-aligned history (Undo/Redo) and document actions (Import, Export, Copy, Whitespace cleanup, and Clear).
+  - **Synchronized Top Horizons & Expansive Canvas**: Locked a uniform `h-9` (36px) subheader height across all three panels (Outline, Canvas, and Guide) to establish a clean horizontal baseline, and expanded modal max-width to `max-w-7xl` (1280px) to guarantee a generous 700px+ editor viewport.
+  - **Debounced Undo/Redo Engine (`useScriptHistory.ts`)**: Full keyboard (<kbd>Ctrl+Z</kbd>, <kbd>Ctrl+Y</kbd>, <kbd>Ctrl+Shift+Z</kbd>) and toolbar history engine with 300ms input debouncing that preserves precise caret indices and scroll positions across undo/redo operations.
+  - **Persistent Custom Tags Engine (`useCustomTags.ts`)**: Stores user-defined directive tags in `localStorage` (`sceneflow_custom_script_tags`), with smart selection wrapping (`[[TAG]]...[[/TAG]]`) and seamless insertion at cursor.
+- **Centralized Keyboard Shortcuts Architecture & Interactive Cheat-Sheet (`src/constants/shortcuts.ts`, `src/components/KeyboardShortcutsModal.tsx`, `src/hooks/useKeyboardShortcuts.ts`, `src/components/AppInfoModal.tsx`, `src/components/header/SettingsMenuDropdown.tsx`, `src/components/header/FileMenuDropdown.tsx`, `src/components/raw-script/components/ScriptEditorFooter.tsx`, `src/App.tsx`)**:
+  - **Single Source of Truth (`src/constants/shortcuts.ts`)**: Established a centralized shortcuts metadata registry organizing all application shortcuts across 6 categories: Playback & Media, Studio Preferences, Script Editor, Cue Inspector, Splitters & Layout, and General & Navigation. Provides platform-specific key combinations (macOS `⌘`/`Option` vs. Windows/Linux `Ctrl`/`Alt`), human-readable labels, contextual tags, secondary aliases, and pure search/filter helpers (`searchShortcuts`, `getShortcutsByCategory`).
+  - **Interactive Keyboard Shortcuts Modal (`KeyboardShortcutsModal.tsx`)**: Built a studio-grade searchable cheat-sheet modal triggered globally via <kbd>?</kbd> (<kbd>Shift+/</kbd>), through Studio Preferences (`[ ⚙️ Settings ▾ ]`), or via the App Info dialog. Features real-time multi-attribute search (matching label, description, key names, and aliases), 6 category filter tabs, elevated `<kbd>` key badges with platform glyphs, and contextual execution tags.
+  - **Modal Height Stabilization & Zero Layout Shift**: Locked the modal container to a stabilized height (`h-[620px] max-h-[85vh]`), eliminating jarring vertical re-centering and container resizing when switching between category tabs with differing item counts.
+  - **Quick Navigation Hotkeys (`useKeyboardShortcuts.ts`, `App.tsx`, `AppHeader.tsx`)**:
+    - **Toggle File Menu (<kbd>Shift+F</kbd> / <kbd>Alt+F</kbd>)**: Opens or closes the desktop File dropdown menu without requiring mouse navigation.
+    - **Open Source Script (<kbd>Shift+S</kbd>)**: Directly opens the raw script editor modal from anywhere in the app with an inline `<kbd>Shift+S</kbd>` badge in the File menu.
+    - **Open Cue Editor (<kbd>Shift+E</kbd>)**: Directly opens the sync cues JSON modal from anywhere in the app with an inline `<kbd>Shift+E</kbd>` badge in the File menu.
+    - **Open Script Library (<kbd>Shift+L</kbd>)**: Directly opens the project library catalogue.
+  - **Raw Script Editor Commit Shortcut (<kbd>Ctrl+Enter</kbd> / <kbd>Cmd+Enter</kbd>)**: Added a fast keyboard shortcut in `RawScriptModal` to commit and apply script changes directly from the editor canvas, paired with an inline shortcut badge on the footer action button.
+  - **Dynamic App Info Synchronization (`AppInfoModal.tsx`)**: Connected the quick shortcuts overview table in `AppInfoModal` directly to `SHORTCUTS_REGISTRY`, adding a "Full Cheat-Sheet (?)" action button to launch the comprehensive modal.
+  - **Canonical Nomenclature Standardization**: Aligned UI copy and tab labels to the canonical "Script" standard (e.g. "Script Editor", "Script" tab), replacing legacy "Screenplay" naming across shortcuts and tooltips.
+- **BRIEF State Engine Counters & Multi-Section Breakdown (`src/lib/briefAnalysis.ts`, `src/lib/scriptProcessor.ts`, `src/components/edit/EditRightPanel.tsx`, `src/App.tsx`)**:
+  - **State Engine Analysis Engine (`src/lib/briefAnalysis.ts`)**: Introduced a pure analysis module providing `countSubStatesInLine` to parse modular beat transitions chained by `->` (filtering empty whitespace, minimum 1) and `analyzeBriefSections` to aggregate overall totals and per-section breakdowns.
+  - **Multi-Brief Section Partitioning (`src/lib/scriptProcessor.ts`)**: Added `briefSectionIndex?: number` to `ProcessedLine`, incrementing sequential section indices upon each `[<BRIEF>]` opening delimiter to support multi-scene/multi-part scripts with multiple execution blocks.
+  - **Contextual Scene Anchoring**: Dynamically resolves the nearest preceding structural heading, roman title, or part separator (e.g. `I. FALSE PRETENSE` or `INT. CORRIDOR - NIGHT`) traversing past staging blocks to label each section card clearly.
+  - **Cue Inspector Idle Overview Deck (`src/components/edit/EditRightPanel.tsx`)**: Rendered a dedicated **BRIEF State Engine** summary card in the idle workstation view featuring global **Macro-States ($S_n$)** and **Total Sub-States** metric counters, section count badge, and individual section cards detailing state index ranges ($S_{start}–S_{end}$) and macro/sub-state counts. Automatically hides on traditional scripts without `[<BRIEF>]` tags to preserve focused cue management.
+  - **Workstation Plumbing (`src/App.tsx`)**: Forwarded memoized `processedLines` into `<EditRightPanel />`.
+- **Universal File Menu Sync Cues JSON & Source Script Integration (`src/components/header/FileMenuDropdown.tsx`, `src/components/RawScriptModal.tsx`, `src/components/AppHeader.tsx`, `src/App.tsx`, `src/components/edit/SyncCuesToolbar.tsx`)**:
+  - **Universal Raw Data Access in File Dropdown**: Integrated `Sync Cues (JSON)...` (with `Braces` icon) and `Source Script...` (with `FileText` icon) directly into the desktop `[ File ▾ ]` dropdown menu within a dedicated **Script & Cue Data** middle section.
+  - **Zero-Mode-Switching Friction**: Grants immediate access to raw cues JSON, schema validation, Gemini AI prompt templates, and source script editing across both Playback and Edit modes without requiring users to switch modes or search through sub-panel toolbars.
+  - **Unified Project I/O Tier**: Consolidated `New Project` alongside `Open Project...` and `Save Project` in the top tier for coherent document lifecycle management.
+  - **Dropdown Width Calibration**: Expanded container width to `w-60` for comfortable whitespace, clean typography, and seamless visual balance.
+  - **Header Plumbing & Modal Auto-Dismissal**: Added `onOpenRawCuesModal`, `onOpenRawScriptModal`, `isCuesModalOpen`, and `isScriptModalOpen` to `AppHeaderProps`, automatically dismissing open dropdown menus when either modal launches.
+  - **In-Panel Tooltip Clarity**: Enhanced the tooltip for the in-panel `[ { } JSON ]` button in `SyncCuesToolbar.tsx` to `"View, edit, or import sync cues JSON & AI prompt schema"`.
+- **Auto-Scroll Center-Tracking Viewport Spacers (`src/components/edit/SyncCuesPanel.tsx`)**:
+  - Added dynamic `spacerHeight` (calculated as `Math.max(0, Math.floor(viewportHeight / 2))` measured via `useLayoutEffect` and `ResizeObserver` on the viewport container) rendered as top and bottom spacers before and after the cues list in both **Cards** and **Compact** density modes.
+  - Enables true vertical center-tracking (`scrollTop = relativeTop - H/2 + h/2`) for cues positioned at the extreme start (first cue) and end (last cue) of the timeline, eliminating viewport boundary clamping where boundary cues were previously restricted to the top or bottom edges due to lack of scroll travel.
+  - Automatically deactivates (`spacerHeight = 0`) when the `[ Scroll ]` toggle is disabled (`isAutoScrollEnabled === false`) or when zero cues match active filters, preserving snug top alignment for manual browsing and cleanly centered empty states without scrollbars.
+  - Added `viewportHeight` and `densityMode` to the auto-scroll dependency array, and `isAutoScrollEnabled` to the monotonic guard reset effect, ensuring instantaneous re-centering when resizing workstation panels, toggling density modes, or re-enabling auto-scroll.
+- **Updates on X Badge & Navigation Integration (`README.md`, `src/constants/links.ts`, `src/components/common/XIcon.tsx`, `src/components/AppHeader.tsx`, `src/components/ScriptHeaderControls.tsx`, `src/styles/tokens/ui.ts`)**:
+  - **Hero Badge**: Added Shields.io "Updates on X" badge (`@tarumainfo`) to the `README.md` hero section alongside the Live App badge.
+  - **`XIcon` Component (`src/components/common/XIcon.tsx`, `src/components/common/index.ts`)**: Created a dedicated SVG component for the official X brand mark.
+  - **Centralized Link**: Registered `x: 'https://x.com/tarumainfo'` in `EXTERNAL_LINKS` (`src/constants/links.ts`).
+  - **Desktop Navigation Pill**: Added `[𝕏 Updates]` action pill to `AppHeader.tsx` styled via `UI_TOKENS.button.xPill`.
+  - **Mobile Navigation Parity**: Added mobile `[𝕏]` icon button in `ScriptHeaderControls.tsx`.
+
+### Changed
+- **Header Tip Action Pill (`src/components/AppHeader.tsx`, `src/components/ScriptHeaderControls.tsx`)**:
+  - Renamed the header Ko-fi pill label from `Support` to `Tip` (with updated tooltip `Tip on Ko-fi`), eliminating semantic confusion with customer/technical support while matching Ko-fi's gratuity model with a compact 3-character footprint.
+
+### Optimized
+- **Instant Color Theme Switching & CSS Transition Suppression Engine (`src/index.css`, `src/hooks/useAppShellTheme.ts`, `src/hooks/useScriptPreferences.ts`, `src/App.tsx`, `src/styles/tokens/ui.ts`)**:
+  - **Eliminated Paint & Transition Thrashing**: Removed sluggish `0.25s` and `200ms` background-color and text-color CSS transitions from `body`, `.script-paper-container`, and `rightPanelBase`, eliminating main-thread frame drops and stutter caused by concurrent React full-script reconciliation and CSS transitions.
+  - **Momentary Transition Suppression Utility (`disableTransitionsTemporarily()`)**: Added and exported `disableTransitionsTemporarily()` in `src/hooks/useAppShellTheme.ts`. Momentarily injects `.disable-theme-transitions` onto `document.documentElement` to force `transition: none !important;` across all DOM nodes and pseudo-elements during the theme update frame, executing a synchronous layout flush (`offsetHeight`) and removing the class via double-RAF.
+  - **Full Theming & Modifier Coverage**: Automatically invoked whenever `effectiveCategory` updates in `useAppShellTheme`, during script theme preset changes (`setScriptThemeId`) and pure black mode toggles (`setPureBlackMode`) in `useScriptPreferences`, and during pure black attribute application in `App.tsx`.
+  - **Accessibility & Motion Preference**: Added global `@media (prefers-reduced-motion: reduce)` in `src/index.css` to honor system-level motion reduction preferences across the entire application.
+  - **Preserved Interactive Micro-Animations**: Buttons, pills, dropdowns, and cards retain their snappy hover states and press feedback (`active:scale-95`) without being hindered by theme switching.
+- **Monolithic Bundle Splitting & 70% Initial JS Payload Reduction (`src/App.tsx`, `vite.config.ts`, `package.json`)**:
+  - **Dynamic Lazy Modal Loading (`src/App.tsx`)**: Converted secondary modals (`RawScriptModal`, `RawCuesModal`, `LibraryModal`, `MobileLibraryModal`, `ScriptColorModal`, `MobileColorModal`, `KeyboardShortcutsModal`, `AppInfoModal`, `TimingSettingsModal`, `StagingModal`) to `React.lazy()` dynamic imports wrapped in `<Suspense fallback={null}>`. Secondary dialog code is no longer evaluated on initial page load.
+  - **Viewport-Aware Modal Mounting (`src/App.tsx`)**: Conditioned `LibraryModal` vs `MobileLibraryModal` and `ScriptColorModal` vs `MobileColorModal` on `isDesktop`, eliminating duplicate hidden modal DOM mounting and duplicate theme listeners.
+  - **Vite Rollup Manual Chunks (`vite.config.ts`)**: Configured `build.rollupOptions.output.manualChunks` to split vendor dependencies into isolated cacheable chunks (`vendor-react`, `vendor-motion`, `vendor-icons`, `vendor-player`).
+  - **Dramatic Bundle Footprint Reduction**: Reduced the initial entry bundle from `778 kB` (`index-DZjqG_4g.js`) down to `243 kB` (`index-C1mX-LZ-.js`) and initial gzip from `215 kB` down to `65 kB` (~70% reduction), eliminating all Vite chunk size warnings and isolating `vendor-motion` (`128 kB`) strictly to animated modal usage.
+- **Source Script Studio High-Performance Engine & Zero-Lag Modal Opening (`src/components/RawScriptModal.tsx`, `src/components/raw-script/*`)**:
+  - **Eliminated Mount Re-render Cascades (`useWordWrap.ts`, `useScriptHistory.ts`)**: Guarded pre-paint line height measurement state (`prev.length === 0 ? prev : []`) and eagerly initialized history entries, eliminating two redundant synchronous re-render passes during modal mount.
+  - **95% Faster Outline Parsing (`useScriptOutline.ts`)**: Implemented fast-path character prefix filtering (`[`, `#`, and section token pre-checks) to bypass tens of thousands of regular expression evaluations on standard dialogue and action lines. Replaced ancestral tree walks with a single-pass bottom-up $O(N)$ graph accumulation for section descendant counts.
+  - **React 19 Concurrent UI Scheduling (`RawScriptModal.tsx`)**: Connected outline parsing to `useDeferredValue(draftText)`, prioritizing instant 60 FPS modal frame rendering and textarea responsiveness while processing outline generation in non-blocking background ticks.
+  - **DOM Layout Virtualization via CSS Content-Visibility (`ScriptOutlineSidebar.tsx`)**: Extracted memoized `OutlineItemRow` components configured with `[content-visibility:auto] [contain-intrinsic-size:26px]`, allowing modern rendering engines to skip off-screen layout and paint for hundreds of outline sections while preserving smooth native scrolling and full accessibility.
+  - **Comprehensive Subcomponent Memoization (`raw-script/components/*`, `RawScriptModal.tsx`)**: Wrapped all 6 subcomponents (`ScriptModalHeader`, `ScriptEditorToolbar`, `ScriptOutlineSidebar`, `ScriptEditorCanvas`, `ScriptFormattingGuide`, `ScriptEditorFooter`) in `React.memo` and stabilized all toolbar, canvas, and document handlers with `useCallback` to eliminate unnecessary re-renders while typing.
+  - **Hardware Acceleration (`RawScriptModal.tsx`)**: Added `will-change-[transform,opacity]` to the modal dialog card, promoting it to a dedicated GPU layer to prevent animation stutter and compositor stalls during zoom-in transitions.
+
+### Refactored
+- **Script Editor Modularization & Subpackage Architecture (`src/components/raw-script/`, `src/components/RawScriptModal.tsx`)**:
+  - Decoupled the monolithic 700+ line `RawScriptModal.tsx` into a modular subpackage (`src/components/raw-script/`) with zero regression:
+    - `types.ts`: Clean interface definitions for outline nodes, history snapshots, and core directive presets.
+    - `hooks/`: Isolated state machines for history (`useScriptHistory`), outline parsing and collapse states (`useScriptOutline`), word wrap measurement (`useWordWrap`), and tag persistence (`useCustomTags`).
+    - `components/`: Specialized UI components (`ScriptModalHeader`, `ScriptOutlineSidebar`, `ScriptEditorToolbar`, `ScriptEditorCanvas`, `ScriptFormattingGuide`, `ScriptEditorFooter`).
+    - `index.ts`: Unified barrel export providing clean public integration for `RawScriptModal.tsx`.
+
+### Removed
+- **Dead Dependencies & Orphaned Legacy Components (Zero-Regression Pruning)**:
+  - **Unused `package.json` Dependencies**: Removed unused server framework `express` (`^4.21.2`), `@types/express` (`^4.17.21`), `dotenv` (`^17.2.3`), unused AI SDK `@google/genai` (`^1.29.0`), duplicate `vite` in `dependencies`, and `autoprefixer` (`^10.4.21`).
+  - **Orphaned Component Files**: Pruned superseded compatibility adapters and early prototypes (`PlaybackLeftPanel.tsx`, `EditLeftPanel.tsx`, `CueTimingInputs.tsx`, `CueEditorActions.tsx`) with zero runtime references.
+  - **Dead Internal Exports**: Removed unused legacy `formatTimecode(seconds)` in `src/lib/utils.ts`, unused alias `CUES_SYSTEM_PROMPT` in `src/schemas/cues.prompt.ts`, and re-exports in `src/components/edit/index.ts`.
+  - **Clean Knip Audit**: Verified 0 unused files, 0 unused dependencies, and 0 unused devDependencies across the repository.
+
+### Fixed
+- **Restore Missing Confirmation Dialogs & Overlap Picker (`src/App.tsx`)**:
+  - **Reconnected Reset Confirmation Modal (`ResetConfirmationModal.tsx`)**: Re-mounted the confirmation dialog in `App.tsx`'s root render tree, resolving a critical regression where selecting screenplay examples from the Library (`LibraryModal` / `MobileLibraryModal`), launching the Starter Guide, creating a blank project (`New Project`), or resetting timing preferences appeared unresponsive.
+  - **Reconnected Cue Deletion Modal (`DeleteConfirmationModal.tsx`)**: Re-mounted the deletion confirmation dialog in `App.tsx`, restoring the interactive confirmation prompt required to delete cues from the timeline and editor.
+  - **Reconnected Overlap Cue Selector (`OverlapPicker.tsx`)**: Re-mounted the floating context menu popover, restoring the ability to select and edit individual overlapping cues on screenplay script lines.
+- **Sync Cues Auto-Scroll Re-Anchoring & Upcoming Cue Fallback (`src/lib/cueUtils.ts`, `src/components/left-panel/WorkstationLeftPanel.tsx`, `src/components/edit/SyncCuesPanel.tsx`)**:
+  - Added `findScrollTargetCue` utility to provide an intelligent upcoming cue fallback when playback is in an inter-cue silence gap or paused between lines (`activeCue === null`), centering the viewport on the next upcoming cue (`cue.startTime >= currentTime`) rather than remaining stranded at `scrollTop = 0`.
+  - Decoupled visual cue illumination (`activeCueId` / `activeCueIds`) from viewport positioning (`scrollTargetCueId`), ensuring fallback cues in gaps do not show premature active halo glow or gradient wash styling.
+  - Automatically resets the Forward Monotonic Scrolling Guard (`furthestScrollTopRef.current = 0`) on mode transition into Edit mode (`prevMode !== 'edit' && mode === 'edit'`), playhead scrubber jumps (`currentTime < prevTime - 0.3` or forward jump $> 1.5$s), and manual cue selection (`selectedCueId`), eliminating delays where auto-scroll was previously frozen waiting for playback to catch up to an older downstream scroll horizon.
+- **Collapsible Filter Section State Decoupling (`src/components/edit/SyncCuesToolbar.tsx`)**:
+  - Fixed a logic defect where the search and category filter drawer in `SyncCuesToolbar` could not be collapsed via the `[ Filter ]` button or <kbd>Escape</kbd> shortcut when any active search query or category filters were applied.
+  - Decoupled drawer expansion (`isExpanded`) from active filter state (`isFiltering`), allowing users to collapse the drawer to reclaim vertical screen space while preserving active filters, cue list narrowing, and the pulsing blue indicator dot on the collapsed filter button.
+  - Preserved smart auto-expansion when filters transition from inactive to active, and added container-level <kbd>Escape</kbd> dismissal for keyboard navigation inside the filter drawer.
+
+## [2.4.0] - 2026-09-15
+
+### Added
+- **Studio-Grade Cues JSON Editor & LLM Sync Setup (`src/components/RawCuesModal.tsx`, `src/schemas/cues.schema.json`, `src/schemas/cues.prompt.ts`, `public/schema.json`, `public/sync-prompt.txt`)**:
+  - **2-Column Studio Workstation (`RawCuesModal.tsx`)**: Revamped the raw cues modal into a comprehensive 2-column workstation featuring a live Schema Reference on the left (essential fields, collapsible auto-calc & optional fields, quick example snippet with copy and insert actions) and dual-tab workstation on the right.
+  - **`JSON Data` Tab with Live Validation & Auto-Unwrapping**: Real-time syntax and schema validation (`{ cues } detected`, `N cues ready`, live error indicator without blocking browser `alert()`) and standard 2-space indentation formatting (`[ ✨ Format JSON ]`) that gracefully unwraps `{ cues: [...] }` object wrappers into standard cue arrays.
+  - **`Sync Prompt & Schema` Tab for Gemini / LLMs**: Unified prompt and schema view with quick 1-click copies, segmented sub-views (`[ 📄 Sync Prompt ]`, `[ 🤖 Gemini Schema ]`, and `[ ◫ Split ]`) for full-width legibility without horizontal scrollbars, and public asset links (`/sync-prompt.txt` and `/schema.json`).
+  - **Externalized Minimal Cues Schema (`cues.schema.json`, `public/schema.json`)**: Modular JSON schema contract defining the `cues` array, field types, enums, and required properties without noisy descriptions that cause LLM token degradation during constrained decoding.
+  - **Standalone Sync Prompt & External Draft Guidance (`cues.prompt.ts`, `public/sync-prompt.txt`)**: Created `CUES_SYNC_PROMPT` with strict verbatim `<ScriptText>` extraction rules and explicit `(minutes * 60) + seconds` timecode math. Draft baseline customization guidance is placed cleanly outside the markdown in the UI.
+  - **Context-Aware Footer**: Displays `Cancel` and `Apply Cues (N)` on the Data tab, and `Close` and `Go to JSON Data →` on the Prompt & Schema tab, with Title Case typography and `whitespace-nowrap` to prevent button height distortion.
+- **Dynamic Dirty Tracking & Clean Script Click Dismissal (`src/hooks/useCueEditor.ts`, `src/App.tsx`, `src/components/edit/EditRightPanel.tsx`, `src/components/edit/CueEditorContext.tsx`, `src/components/script/ScriptLine.tsx`)**:
+  - **Snapshot Change Detection**: Tracked an `originalCue` baseline snapshot in `useCueEditor` and derived dynamic `isDirty` state, detecting changes to start/end times, text content, category types, and script character offsets for existing cues, as well as customized timings or edited quote text in new cue drafts.
+  - **Clean Script Click Dismissal (`dismissIfClean`)**: Provided safe dismissal back to idle workstation overview when clicking on clean screenplay canvas space while in Edit mode without unsaved changes, preventing accidental disruption while reading.
+  - **Click Event Guarding**: Attached `handleScriptClick` on the screenplay container, strictly ignoring clicks on interactive buttons, input elements, external links, staging markers (`e.stopPropagation()` in `ScriptLine`), and active DOM text drag selections.
+  - **Dynamic Status Badging**: Upgraded the Cue Inspector header in `EditRightPanel` with live reactive status badges: dynamic `Saved` (green check) vs `Unsaved` (pulsing amber dot) for existing cues, and `Draft` vs `Draft (Unsaved)` for new cue drafts.
+- **Redesigned Left Panel Headers with Decoupled Progressive Responsive Controls (`src/components/active-highlights/ActiveHighlightsPanel.tsx`, `src/components/left-panel/MediaHeader.tsx`, `src/components/edit/SyncCuesToolbar.tsx`, `src/index.css`)**:
+  - **Highlights Header Single-Row Stepped Layout**: Redesigned `ActiveHighlightsPanel` header into an adaptive single row with progressive stepped label collapsing, eliminating two-tier header wrapping while strictly preserving the live active cue count and 8-slot category LED VU meter strip.
+  - **Compact Track Height Toggle**: Replaced the dual-button track height switcher with a sleek, space-saving single toggle button (`[ ↕ Fixed ]` / `[ ↕ Flex ]`) with dedicated icons and contextual tooltips.
+  - **Playback MediaHeader Live Timecode & Unified Transport**: Extended `LiveTimecodeBadge` to Playback mode when the player is connected, and unified `Replay` and `Play/Pause` controls into a single cohesive pill with a hairline divider.
+  - **Workstation Header Parity**: Added `ListChecks` icon to the `SyncCuesToolbar` title, establishing aesthetic parity across all panel headers.
+- **Cross-Mode Playback Continuity & Unified Workstation Left Panel (`src/components/left-panel/WorkstationLeftPanel.tsx`, `src/components/left-panel/MediaViewport.tsx`, `src/components/left-panel/MediaHeader.tsx`, `src/App.tsx`, `src/components/script/ScriptLine.tsx`)**:
+  - **Single Persistent Media Viewport**: Unified Playback and Edit left panels into `WorkstationLeftPanel`, hosting a permanent `MediaViewport` holding the `<YouTube>` player iframe across mode switches. Completely eliminates YouTube player destruction, abrupt audio cutoff, and video timestamp resets to 0:00 when toggling between Playback Mode and Edit Mode.
+  - **Eliminated Mode-Switch Jitter & Lag**:
+    - Removed expensive third-party iframe teardown and reconstruction cycles on mode transitions.
+    - Optimized `areScriptLinePropsEqual` in `ScriptLine.tsx` to skip re-rendering screenplay lines that contain no cues and no active text selection, preventing hundreds of plain text lines from re-rendering simultaneously on mode toggle.
+    - Replaced `transition-all duration-300` with `transition-colors duration-200` on `.script-paper-container` in `App.tsx` to eliminate layout dimension animation thrashing during split-ratio snapping.
+  - **Screenplay Position Continuity**: Wired a single-tick alignment hook in `App.tsx` that identifies the active cue at current playback time (or closest preceding cue) upon entering Edit Mode, smoothly centering that exact line and eliminating vertical drift caused by the 3-panel layout padding adjustment.
+  - **Workflow Mode Persistence (`localStorage`)**: Persisted active mode (`'playback'` vs `'edit'`) in `localStorage` under `sceneflow_app_mode`, ensuring the application reloads directly into the user's active workspace on page refresh.
+  - **Backwards Compatibility**: Re-exported `PlaybackLeftPanel` and `EditLeftPanel` as thin adapters over `WorkstationLeftPanel` to maintain seamless compatibility.
+- **Mode-Aware Layout Reset & 40/35/25 Edit Workstation Distribution (`src/hooks/useScriptPreferences.ts`, `src/App.tsx`, `src/components/common/InspectorSplitDivider.tsx`, `src/components/edit/EditRightPanel.tsx`)**:
+  - Implemented mode-aware layout reset behavior: resetting view layout in Edit Mode now snaps panels to a **40 / 35 / 25** distribution (40% Left Media/Cue Panel, 35% Center Screenplay, 25% Right Cue Inspector) instead of inheriting Playback Mode's 65/35 ratio.
+  - Decoupled edit mode split ratio (`editSplitRatio`, default 40%) and inspector ratio (`inspectorRatio`, default 25%) from playback mode split ratio (`splitRatio`, default 65%), persisting each independently in `localStorage` (`sceneflow_edit_split_ratio`, `sceneflow_inspector_ratio`, `sceneflow_split_ratio`).
+  - Upgraded `InspectorSplitDivider` and `EditRightPanel` to support percentage ratio-based dragging (`18%` to `45%`, with `260px` pixel floor safety), keyboard accessibility, and double-click reset to default 25%.
+  - Wired `Reset View` (<kbd>Shift+R</kbd>) to automatically re-open the Cue Inspector if collapsed and restore the 40/35/25 workstation distribution in Edit Mode.
+- **Cue Inspector Ergonomic Overhaul & Modern Workstation Controls (`src/components/edit/CueEditorForm.tsx`, `src/components/edit/CueTimingCard.tsx`, `src/components/edit/CueSceneContext.tsx`, `src/components/edit/CueScriptAnchoring.tsx`, `src/components/edit/index.ts`)**:
+  - **Audio-Visual Timing Deck (`CueTimingCard.tsx`)**: Replaced raw inputs with symmetrical Start/End boundary cards featuring live formatted timecode HUDs (`00:00.2`), single-click micro-nudge steppers (`-0.5s`, `-0.1s`, `+0.1s`, `+0.5s`), video capture buttons, and a live calculated duration chip (`⏱ 1.6s`).
+  - **Integrated Preview & Dynamic Loop Controller**: Added dedicated `Play Cue [▶]` preview button and `Loop [🔁]` toggle with live mutable ref synchronization (`startTimeRef`, `endTimeRef`, `isLoopingRef`), enabling real-time boundary updates on the fly during active playback without needing to pause and restart.
+  - **Surrounding Scene Context Window (`CueSceneContext.tsx`)**: Displays screenplay lines immediately preceding (`PREV`) and following (`NEXT`) the selected text in dimmed italicized styling, anchoring the editor without cross-panel eye scanning.
+  - **Dedicated Script Anchoring Card (`CueScriptAnchoring.tsx`)**: Decoupled character index offsets from the timing deck, retaining fully editable `Start Index` and `End Index` inputs with backspace-safe parsing, live character span badge (`54 chars`), and cue ID chip.
+  - **Pinned Sticky Bottom Action Bar (`CueEditorForm.tsx`)**: Anchored `Update Cue` (<kbd>Ctrl+Enter</kbd>), `Cancel` (<kbd>Esc</kbd>), and `Delete` permanently to the bottom of the inspector, keeping the top header uncluttered and controls always accessible.
+- **Desktop 3-Panel Edit Workstation & Dedicated Cue Inspector (`src/App.tsx`, `src/components/edit/EditRightPanel.tsx`, `src/components/common/InspectorSplitDivider.tsx`, `src/components/ScriptHeaderControls.tsx`, `src/hooks/useScriptPreferences.ts`)**:
+  - Transitioned Desktop Edit Mode into a dedicated 3-panel layout: Left Panel (Media Preview, transport controls, and time-clustered cue list), Center Panel (Screenplay canvas with unconstrained `flex-1 min-w-0` reading flow), and Right Panel (dedicated `EditRightPanel` Cue Inspector).
+  - Implemented `InspectorSplitDivider` with pointer-capture drag tracking (60–144fps via `requestAnimationFrame`), hardware transition suppression (`is-resizing-split`), iframe event guard overlay, double-click reset to default width (`360px`), keyboard accessibility (<kbd>←</kbd> / <kbd>→</kbd> / <kbd>Enter</kbd>), and boundary clamping (`280px` to `560px`).
+  - Added dynamic inspector toggling via `<PanelRight />` in `ScriptHeaderControls`, with automatic opening on script text selection or cue card click.
+  - Added `inspectorWidth` preference state and `sceneflow_inspector_width` persistence in `useScriptPreferences.ts`, unified with `Reset View Layout (Shift+R)`.
+- **Two-Tier Active Cue Visual Hierarchy & Multi-Cue Highlighting (`src/components/edit/SyncCueCard.tsx`, `src/components/edit/MiniCueCard.tsx`, `src/components/edit/SyncCueRow.tsx`, `src/components/edit/SyncCuesPanel.tsx`, `src/components/edit/EditLeftPanel.tsx`, `src/lib/cueUtils.ts`)**:
+  - Implemented `findActiveCues(cues, currentTime, settings)` utility in `src/lib/cueUtils.ts` to identify all concurrently active cues at the current playback timestamp.
+  - Decoupled primary auto-scroll target tracking (`activeCueId: string | null`) from multi-cue active state (`activeCueIds: Set<string>`) in `EditLeftPanel.tsx`, using `useRef` reference stabilization to preserve the high-performance playback tick shield boundary (0 unnecessary re-renders while video is running).
+  - Established a two-tier visual feedback hierarchy across `SyncCueCard`, `MiniCueCard`, and `SyncCueRow`:
+    - **Scroll Focus Cue (`isPrimary`)**: Highlighted with a vibrant directional ambient gradient wash (`25% → 7%`, `opacity-100`), a theme-calibrated border (`rgba(${themed.rgb}, 0.65)`), a luminous outer ring and box-shadow halo (`0 0 10px rgba(..., 0.3)`), and an expanded glowing theme stripe (`w-1.5`).
+    - **Secondary Co-Active Cues (`isActive && !isPrimary`)**: Highlighted with a visible yet subtle ambient gradient wash (`~16.2% → 4.5%`, `opacity-65`) while omitting custom borders (retains standard subtle border) and outer glows to keep visual noise low during dense multi-track playback.
+  - Upgraded `SyncCueRow` compact list items to use theme-calibrated `themed.rgb` borders and box shadows, replacing legacy static `blue-500` outlines.
+- **Time-Clustered Fluid Grid & Adaptive Cue Layout (`src/components/edit/SyncCuesPanel.tsx`, `src/components/edit/SyncCueCard.tsx`, `src/components/edit/MiniCueCard.tsx`, `src/components/edit/index.ts`, `src/lib/cueUtils.ts`)**:
+  - Implemented temporal cue clustering via pure `clusterCuesByTime(cues, maxGapSeconds = 2.5, maxClusterSpanSeconds = 10.0, maxCuesPerCluster = 8)` with hard ceiling bounds (max 10s span, max 8 cues) preventing continuous cue sequences from merging into monolithic mega-clusters.
+  - Added sticky Timecode Ruler Strips (`⏱ 00:00.0 – 00:04.5 · N cues`) with backdrop blur, giving editors clear temporal landmarks when scanning through scenes.
+  - Replaced single-column stacked cards with a responsive auto-fill fluid grid (`grid-cols-[repeat(auto-fill,minmax(160px,1fr))] [grid-auto-flow:dense]`) that packs short and long cards into dense, gap-free rows.
+  - Introduced `MiniCueCard` component optimized for short audio, camera, and reaction bursts ($\le 1.8$s, non-dialogue, $\le 40$ characters) fitting cleanly within single 160px grid cells.
+  - Integrated dialogue protection rule: cues with `type === 'dialogue'` or text $> 40$ch are guaranteed at least 2 columns via `SyncCueCard`, ensuring spoken character dialogue is never cut off or cramped into mini cards.
+  - Added adaptive 1-to-3 column spans (`col-span-1 min-[420px]:col-span-2 min-[640px]:col-span-3`) avoiding `col-span-full` to prevent empty white space dead zones on wider viewports.
+  - Harmonized active and selected states using theme-calibrated `rgba(${themed.rgb}, ...)` borders and subtle glowing shadows, eliminating static `blue-500` color clashes with category accent stripes.
+- **Compact 3-Zone Sync Cue Card Redesign (`src/components/edit/SyncCueCard.tsx`, `src/types/script.ts`)**:
+  - Rebuilt `SyncCueCard` into a compact 3-zone micro-card featuring a unified sequence/ID chip (`[ #31 · cue_31 ]`), category badge, dynamic AI tag tray, clamped quote, and technical diagnostics footer.
+  - Supported inline character prefixes (`MARK: "..."`) for dialogue cues to present screenplay dialogue hierarchy while preserving vertical height (~74–76px).
+  - Added real-time alignment diagnostics displaying script offset spans (`startIndex–endIndex · Nch`) or a pulsing `⚠️ Needs Align` indicator for unanchored imports.
+  - Extended the `Cue` data model with optional `speaker`, `matchStatus`, optional indices, and an extensible index signature to preserve custom metadata.
+- **Separated Blank Project Creation & Official Starter Guide (`public/examples/guide.json`, `public/examples/blank.json`, `src/App.tsx`, `src/hooks/useScriptStorage.ts`)**:
+  - Extracted the 1,200+ line interactive tutorial script and 100+ cues into a dedicated `public/examples/guide.json` asset.
+  - Reset `public/examples/blank.json` into an authentic empty project template (empty script text, zero cues, zeroed timing buffers) for starting new screenplays from scratch without manual deletion.
+  - Added dedicated `loadGuide()` hook handler in `useScriptStorage` alongside `loadBlank()`.
+  - Extended `ResetConfirmationState` and `ResetConfirmationModal` to cleanly distinguish between `'new'` ("Create New Project?" with automatic transition to Edit mode) and `'guide'` ("Load Starter Guide?" with transition to Playback mode).
+- **Studio Preferences Keyboard Shortcuts & UI Badges (`src/hooks/useKeyboardShortcuts.ts`, `src/App.tsx`, `src/components/AppHeader.tsx`, `src/styles/tokens/ui.ts`, `src/components/AppInfoModal.tsx`)**:
+  - Implemented clash-free global keyboard shortcuts for primary studio preference actions: <kbd>Shift+C</kbd> (Script Paper & Colors modal), <kbd>Shift+T</kbd> (Timing & Durations modal), and <kbd>Shift+R</kbd> (Reset View Layout).
+  - Integrated `!e.ctrlKey && !e.metaKey && !e.altKey` and `contentEditable`/input/modal guards to guarantee zero conflict with browser hotkeys or text editing.
+  - Added visual `<kbd>` shortcut badges (`UI_TOKENS.badge.shortcut`) positioned on the right side of each settings row in `[ ⚙️ Settings ▾ ]`.
+  - Expanded `menuSettings` dropdown width to `w-72` (288px) for comfortable padding and zero label wrapping.
+  - Added auto-close effect on `AppHeader` when modal dialogs mount, and registered new shortcuts in `AppInfoModal`.
+- **Studio Preferences "Reset All" Action (`src/components/header/SettingsMenuDropdown.tsx`, `src/components/AppHeader.tsx`, `src/App.tsx`)**:
+  - Added a discrete `[↺ Reset All]` action in the header of the Studio Preferences dropdown (`SettingsMenuDropdown.tsx`), appearing dynamically whenever any preference or layout option is non-default.
+  - Instantly restores App Theme (`auto`), Script Width (`standard` / 576px), Scroll Focus (`top` / 35%), and View Layout (50% split, 240px video height, uncollapsed) to factory defaults in a single click.
+  - Harmoniously complements the focused `Reset View Layout (Shift+R)` action, which enables resetting window pan geometry without affecting chosen color themes or reading widths.
+- **Sub-Frame Smooth Timeline Clock Extrapolator (`src/components/active-highlights/timeline/useSmoothTimelineTime.ts`, `src/components/active-highlights/index.ts`)**:
+  - Implemented high-precision `useSmoothTimelineTime` hook leveraging `requestAnimationFrame` and `performance.now()` to advance timeline time continuously at the display's native refresh rate (60Hz, 120Hz, etc.).
+  - Integrated soft-sync drift compensation against 100ms YouTube timecode ticks with instant snapping on seeking (>0.35s) and zero idle overhead when paused.
+- **Live Timecode HUD Badge & Precision Formatter (`src/components/edit/LiveTimecodeBadge.tsx`, `src/components/edit/EditLeftPanel.tsx`, `src/components/edit/CueTimingInputs.tsx`, `src/lib/utils.ts`)**:
+  - Added pure `formatPrecisionTimecode(seconds)` utility formatting timestamps into `MM:SS.s` (or `HH:MM:SS.s` for $\ge 1\text{h}$).
+  - Docked a live `LiveTimecodeBadge` in the Media Preview header displaying a real-time pulsing status pip, current playback timecode, and media duration (e.g. `00:03.9 / 01:09.0`).
+  - Embedded live formatted timecodes directly into `CueTimingInputs` above Start/End inputs and into `SyncCueCard` / `SyncCueRow` item tags.
+- **Collapsible YouTube Source Header Pill (`src/components/YoutubeSourceInput.tsx`, `src/components/edit/EditLeftPanel.tsx`)**:
+  - Replaced the bulky persistent YouTube input container with a sleek header pill (`[ 🟢 {videoId} ✏️ ]`), reclaiming ~50px of vertical height for the video player and cue list.
+  - Clicking the pill or edit icon opens a compact overlay input; clearing the video ID auto-opens the input with auto-focus.
+- **Collapsible Search & Multi-Select Category Filters (`src/components/edit/SyncCuesToolbar.tsx`, `src/components/edit/SyncCuesPanel.tsx`)**:
+  - Restructured the toolbar into a compact single-row resting state with a dedicated `[ 🔍 Filter ]` toggle action, reclaiming ~64px of vertical height by default.
+  - Added multi-select category filtering (`Set<string>`) allowing users to filter by multiple cue types concurrently (e.g. `DIALOGUE` + `ACTION`).
+  - Added an interactive filter counter badge (`{filteredCount}/{totalCount}`) that converts into an instant 1-click reset chip (`[ 12/297 ✕ ]`) when filtering is active.
+  - Added keyboard shortcut support (<kbd>Escape</kbd> to clear query or dismiss bar) and smart auto-expansion whenever filters are active.
+- **Performance-Shielded Left Panel Auto-Scroll & Forward Monotonic Tracking (`src/components/edit/SyncCuesPanel.tsx`, `src/components/edit/SyncCuesToolbar.tsx`, `src/components/edit/SyncCueCard.tsx`, `src/components/edit/SyncCueRow.tsx`, `src/components/edit/EditLeftPanel.tsx`, `src/lib/cueUtils.ts`)**:
+  - Implemented high-performance auto-scrolling for the Edit Mode Left Panel Sync Cues Studio, tracking active cues during playback without impacting render performance.
+  - Engineered Tick Shielding boundaries: computed discrete `activeCueId` at `EditLeftPanel` using `findActiveCue()`, shielding `SyncCuesPanel` and 100–300 cue cards/rows from 10–60Hz playback tick re-renders.
+  - Added Forward Monotonic Scrolling Guard (`furthestScrollTopRef`) to mathematically eliminate annoying rubber-band / yo-yo scrolling when nested child cues finish inside longer enclosing cues (e.g. Action cue spanning 0:00 to 0:10 with nested dialogue from 0:05 to 0:09).
+  - Integrated backward seek detection (`currentTime < prevTime - 0.3s`) and filter change invalidation via `seekVersion` to seamlessly reset the monotonic guard during scrub and reverse navigation.
+  - Added filter-aware contextual active cue resolution: evaluates `findActiveCue` against `filterCues(cues, selectedCategories, searchQuery)`, ensuring auto-scroll accurately tracks visible cues when users filter by specific categories (e.g. Action, Camera, VFX) or text queries rather than dropping focus due to unrendered dialogue.
+  - Integrated container-query-responsive `[ 🎯 Scroll ]` toggle action in `SyncCuesToolbar` with persistent user preference in `localStorage` (`sceneflow_edit_autoscroll`).
+  - Added active cue pulsing rings and accent status pips across both Cards (`SyncCueCard`) and Compact (`SyncCueRow`) density modes.
+  - Exported pure `findActiveCue(cues, currentTime, settings)` and `filterCues(cues, selectedCategories, searchQuery)` in `src/lib/cueUtils.ts`, and exported `smoothScrollTo` from `src/hooks/useAutoScroll.ts` with passive wheel/touch cancellation for zero scroll fighting.
+- **Adaptive Container Queries for Split Panels (`src/index.css`, `src/components/edit/EditLeftPanel.tsx`, `src/components/playback/PlaybackLeftPanel.tsx`, `src/components/edit/SyncCuesToolbar.tsx`)**:
+  - Introduced CSS container queries (`@container (max-width: 580px)`) across left panels.
+  - Action button labels (`.header-btn-label`) and YouTube source pill text (`.youtube-pill-text`) automatically collapse to compact icon buttons on narrow panels, eliminating horizontal overflow and text wrapping without JavaScript resize listeners.
+- **Two-Tier Flex Studio Layout & Interactive Sync Cue Station (`src/components/edit/EditLeftPanel.tsx`, `src/components/edit/SyncCuesPanel.tsx`, `src/components/edit/SyncCuesToolbar.tsx`, `src/App.tsx`)**:
+  - Re-architected Edit Mode's Left Panel into an unpinned, two-tier flex workstation mirroring Playback Mode.
+  - **Tier 1 (Media Preview)**: Persistent transport bar (`Replay`, `Play/Pause`, `Hide/Show Video`), live timecode HUD badge, collapsible YouTube source pill, resizable 16:9 video player, and horizontal split divider (`VideoSplitDivider`).
+  - **Tier 2 (Sync Cues Studio)**: Permanently docked `SyncCuesToolbar` and dedicated scrollable cue list supporting both Cards (`SyncCueCard`) and Compact (`SyncCueRow`) density presentations with chronological ordering and `content-visibility: auto` paint acceleration.
+  - **Cross-Panel Synchronized Jump**: Clicking any cue card or row smoothly seeks the video player (without premature pause calls), populates `CueEditorForm`, and scrolls the script reading canvas to center the corresponding line.
+
+### Changed
+- **Legacy `colorClass` Deprecation & Clean Cue Alignment (`src/lib/cueUtils.ts`, `src/hooks/useCueEditor.ts`, `src/components/edit/CueEditorForm.tsx`, `src/components/edit/CueTypeSelector.tsx`, `src/components/script/ScriptLine.tsx`)**:
+  - Deprecated and removed auto-injection of legacy `colorClass` across cue alignment (`realignCuesList`), cue sanitization (`sanitizeCues`), and cue drafting (`useCueEditor`).
+  - Stripped any lingering `colorClass` properties when realigning cues or ingesting JSON, producing cleaner and more compact cue models in state and exported files.
+  - Preserved backward-compatibility ingestion via `LEGACY_CLASS_MAP`: older script files containing `colorClass` without `type` automatically resolve to their canonical semantic category and cleanly drop the deprecated class on next sync/save.
+- **Cue Inspector Action & Destructive Styling Refinements (`src/components/edit/CueEditorForm.tsx`)**:
+  - Removed loose "Esc" text beside the close button in `CueEditorForm` header to eliminate visual noise.
+  - Added resting destructive red styling (`text-red-500/80 bg-red-500/10 border-red-500/20`) to the Cue Delete button in the pinned sticky bottom action bar.
+  - Formatted the <kbd>Esc</kbd> shortcut badge on the Cancel button consistently with design system keyboard badges.
+- **Sync Cues Action Nomenclature & Density Badging (`src/components/edit/SyncCuesToolbar.tsx`)**:
+  - Replaced ambiguous `"RAW"` and `"ALIGN"` button labels with self-describing `"JSON"` (with `{ }` braces icon and tooltip) and `"Resync"` (with `↺` refresh icon and animated `"Synced"` success state).
+  - Added responsive `"Cards"` and `"Compact"` text labels to the view density switcher that automatically collapse to clean icon glyphs (`[ ⊞ | ≡ ]`) via container queries on narrow panels.
+- **Script Preview Header Streamlining & Decluttering (`src/components/ScriptHeaderControls.tsx`, `src/styles/tokens/ui.ts`)**:
+  - Removed the redundant, non-clickable `[PLAYBACK]` / `[EDIT]` mode badge, eliminating toolbar crowding on tablets/wide mobile (`sm:block`) and restoring clean visual clustering of reading controls on desktop.
+  - Added symmetrical `"Script Editor"` header title, loaded line count badge (`{lineCount} lines`), and direct `[Edit Raw]` action button when in Edit mode, cleanly replacing the old standalone `ScriptManagementBar`.
+  - Removed the redundant mobile `TIME 0.0s` pill (`UI_TOKENS.badge.currentTimePillSm`), maximizing reading canvas breathing room and relying on the sticky video player and timeline playhead for timecode feedback.
+  - Pruned unused `currentTimePill` and `currentTimePillSm` badge design tokens from `src/styles/tokens/ui.ts`.
+- **3-Zone Studio Header Architecture & Decluttering (`src/components/AppHeader.tsx`, `src/styles/tokens/ui.ts`)**:
+  - Replaced the cluttered 14-button header with a balanced, studio-grade 3-zone layout (Left: Brand & File System, Center: Workflow Mode, Right: Content, Community & Studio Tools).
+  - **Left Wing (`[ File ▾ ]` Tiered Dropdown Menu)**: Replaced the raw document icon pair with a dedicated desktop `[ File ▾ ]` dropdown pill (`UI_TOKENS.button.filePill`), organized into three functional tiers separated by hairline dividers:
+    1. *Project I/O (Top Section)*: Immediate cursor access to `Open Project...` and `Save Project` for the primary inspect-and-sync workflow.
+    2. *Blank Canvas (Middle Section)*: `New Project` to clear the workspace for writing or pasting a new script.
+    3. *Resources & Discovery (Bottom Section)*: `Starter Guide` (amber sparkles) and `Browse Library...` (amber book).
+  - **Zero Non-Existing Shortcuts & Noise Reduction**: Completely audited and removed non-existing keyboard shortcut annotations (`Ctrl+O`, `Ctrl+S`) and tooltip shortcuts (`(?)` on Info button), while dropping visual noise badges (`Catalog`, `Presets`, `Overlaps`, `65:35`) across menus to keep typography focused and truthful.
+  - **Center Stage**: Introduced a centered segmented control (`[ ▶ Playback | ✏️ Edit ]`) with mode-specific active accents (soft blue for Playback, soft amber for Edit) and responsive icon collapse, providing immediate discoverability of the application's dual-mode architecture.
+  - **Right Wing**: Standardized the standalone Library gateway (`[ 📚 LIBRARY ]`) on a clean neutral surface pill (`UI_TOKENS.button.libraryPop`) featuring the amber book icon and uppercase tracking typography, alongside the Ko-fi support pill, unified Studio Preferences dropdown (`[ ⚙️ Settings ▾ ]`), and dedicated Info modal trigger.
+  - **Studio Preferences Dropdown**: Consolidated loose floating utility icons into a single settings dropdown featuring a direct 4-theme quick-selector grid (`Auto`, `Light`, `Warm`, `Dark`), Script Paper & Colors modal trigger, Timing & Durations modal trigger, and Reset View Layout trigger (with a live customized layout pulse dot and dynamic `Custom` state badge).
+  - **Timecode Removal from Global Header**: Removed floating timecode from the top app chrome, cleanly delegating playback timing to the Video Player transport bar and Timeline window underneath.
+- **Library Modal Onboarding & External Links Decluttering (`src/components/LibraryModal.tsx`, `src/components/MobileLibraryModal.tsx`, `src/components/ScriptHeaderControls.tsx`)**:
+  - Renamed the Substack publication link from `"Article"` to **`"Introduction"`** (`[ Introduction ]` on desktop `LibraryModal`, `[ Intro ]` on `MobileLibraryModal`), clarifying its purpose as a foundational overview of SceneFlow and script-to-screen synchronization.
+  - Removed the redundant `Starter Guide` button from the modal headers across desktop and mobile, centralizing starter guide loading inside the desktop `[ File ▾ ]` dropdown menu.
+  - Removed the redundant standalone article icon button (`<Newspaper />`) from the mobile screenplay header controls (`ScriptHeaderControls.tsx`), maximizing horizontal breathing room for theme colors, library, and support controls on phones.
+
+### Refactored
+- **Cue Authoring State Consolidation & Zero-Prop `CueEditorForm` (`src/components/edit/CueEditorContext.tsx`, `src/components/edit/CueEditorForm.tsx`, `src/components/edit/index.ts`, `src/App.tsx`)**:
+  - Introduced `CueEditorContext` and `<CueEditorProvider>` encapsulating cue draft values, timing inputs, DOM text selections, alternative locations, and persistence callbacks into a unified compound context.
+  - Made `CueEditorForm` zero-prop capable via `useOptionalCueEditorContext()`, removing 15 props of manual prop-drilling in `App.tsx` and enabling `CueEditorForm` to be freely moved or co-located anywhere in Edit Mode (including inside the Left Panel).
+- **Project Lifecycle Decoupling from Cue Authoring (`src/hooks/useCueEditor.ts`, `src/App.tsx`)**:
+  - Untangled project-level `resetConfirmation` and `setResetConfirmation` modal state from `useCueEditor`, relocating it directly into `App.tsx` where project loaders (`loadBlank`, `loadGuide`, `loadExample`, `loadRemoteProject`) reside.
+  - Reduced `useCueEditor` responsibility strictly to cue draft authoring, validation, and deletion.
+- **Dead Code & Legacy Bridge Pruning (`src/components/edit/SyncCuesHeader.tsx`, `src/components/edit/CueLegend.tsx`, `src/components/TimelineCuesPanel.tsx`, `src/components/CueEditorForm.tsx`, `src/components/ScriptManagementBar.tsx`, `src/components/edit/index.ts`)**:
+  - Deleted obsolete `SyncCuesHeader.tsx` (superseded by `SyncCuesToolbar.tsx`) and `CueLegend.tsx` (superseded by interactive toolbar category filter pills).
+  - Deleted legacy re-export bridges `src/components/TimelineCuesPanel.tsx` and `src/components/CueEditorForm.tsx`.
+  - Pruned obsolete `src/components/ScriptManagementBar.tsx`, superseded by the symmetrical right panel header in `ScriptHeaderControls.tsx`.
+  - Pruned deprecated `Timeline*` aliases from `src/components/edit/index.ts`.
+- **Playback Tick Isolation & Theme Resolution Hoisting (`src/components/edit/SyncCueCard.tsx`, `src/components/edit/SyncCueRow.tsx`, `src/components/edit/EditLeftPanel.tsx`, `src/components/playback/PlaybackLeftPanel.tsx`)**:
+  - Removed redundant `useScriptTheme` hook executions inside individual items in `SyncCueCard` and `SyncCueRow`, replacing the fallback with the pure function `getCueColorForTheme` to eliminate 100–300 hook executions on every render and search keystroke.
+  - Extracted the video container into a memoized `EditVideoViewport` inside `EditLeftPanel`, shielding the YouTube player iframe, divider, and cue list from 10Hz `LiveTimecodeBadge` tick updates.
+  - Exported static `YOUTUBE_PLAYER_OPTS` to eliminate per-render options allocation across `EditLeftPanel` and `PlaybackLeftPanel`.
+- **High-Refresh Auto-Scroll Engine & Gesture Interruption (`src/hooks/useAutoScroll.ts`)**:
+  - Replaced browser-native `behavior: 'smooth'` with a high-refresh `requestAnimationFrame` cubic ease-out (`1 - (1 - t)^3`) animator (`smoothScrollTo`), eliminating 60Hz scroll pacing judder and frame rate mismatch on high-refresh displays and during 60fps screen recordings.
+  - Added passive wheel and touch listeners to cancel ongoing auto-scroll animations immediately upon user manual input without scroll fighting.
+  - Declared `smoothScrollTo` at module scope to eliminate function re-allocation on hook evaluation.
+- **Decoupled Screenplay Line Diffing During Playback (`src/App.tsx`)**:
+  - Optimized `renderedScript` to pass static `currentTime={0}` to lines with zero overlapping cues, skipping prop comparisons and reconciliation across 85%+ of screenplay lines on every 100ms tick.
+- **Stabilized Timeline Cue Block Geometry & 0 Hz Layout Reflow (`src/components/active-highlights/timeline/useTimelineWindow.ts`, `src/components/active-highlights/timeline/TimelineCueBlock.tsx`, `src/components/active-highlights/timeline/TimelinePlayheadRuler.tsx`, `src/components/active-highlights/views/HighlightTimelineView.tsx`)**:
+  - Stabilized cue block geometry in `useTimelineWindow` by computing fixed duration widths directly from `(cue.endTime - cue.startTime)`, removing artificial window boundary clamping that previously caused cue blocks to accordion/compress and trigger continuous layout reflows as they traversed window edges.
+  - Removed fixed `100ms linear` CSS transitions on `TimelineCueBlock` and `TimelinePlayheadRuler` in favor of sub-frame continuous `displayTime` rendering, eliminating stop-and-go timer freezes when YouTube ticks arrive late.
+- **Modular Studio Header Architecture & Decoupled Subcomponents (`src/components/AppHeader.tsx`, `src/components/header/*`, `src/hooks/useClickOutside.ts`, `src/hooks/index.ts`)**:
+  - Decomposed the 451-line monolithic `AppHeader.tsx` into a lean ~170-line orchestrator and three dedicated subcomponents under `src/components/header/`:
+    - `FileMenuDropdown.tsx`: 3-tier hierarchical project I/O, blank canvas creation, and resource discovery dropdown.
+    - `SettingsMenuDropdown.tsx`: Studio preferences, quick 4-theme picker, shortcut badge rows (`Shift+C`, `Shift+T`, `Shift+R`), and dynamic `Custom` layout badge.
+    - `ModeSegmentedControl.tsx`: Centered playback vs. edit mode segmented toggle with responsive icon collapsing and ARIA group attributes.
+  - Implemented reusable `useClickOutside` hook utilizing `mousedown`/`touchstart` listeners, replacing blocking full-screen backdrop `div` elements and enabling fluid, single-click transitions between adjacent header dropdowns.
+  - Replaced multiple boolean flags (`isFileDropdownOpen`, `isSettingsDropdownOpen`) with a unified, conflict-free `activeMenu: HeaderMenuId | null` state, allowing effortless scaling for future header tools without $O(N^2)$ state synchronization.
+  - Enforced WAI-ARIA roles (`role="menu"`, `role="menuitem"`, `role="radiogroup"`, `role="radio"`, `role="group"`, `aria-haspopup="menu"`, `aria-expanded`) across all floating menus and triggers.
+- **Playback Loop Decoupling & 0 Hz Header Re-Render Optimization (`src/App.tsx`, `src/components/AppHeader.tsx`)**:
+  - Removed the zombie `currentTime` prop passed to `<AppHeader>`, decoupling the entire top header component tree from the ~10Hz video playback clock loop.
+  - Memoized callback props (`exportJson`, `importJson`, `handleNewProject`, `handleOpenGuide`) in `App.tsx` using `useCallback`.
+  - Wrapped `AppHeader` and all child header subcomponents in `React.memo`, keeping the header 100% idle during media playback.
+
+- **Script Preview Header Decoupling & 0 Hz Playback Re-Render (`src/App.tsx`, `src/components/ScriptHeaderControls.tsx`, `src/styles/tokens/ui.ts`)**:
+  - Removed `currentTime` prop from `ScriptHeaderControlsProps` and `App.tsx`, completely decoupling the script preview header from continuous video playback clock ticks.
+  - Wrapped `ScriptHeaderControls` with `React.memo`, eliminating high-frequency Virtual DOM diffing during media playback.
+  - Pruned manual `localStorage.setItem` call on width preset selection, delegating persistence entirely to `useScriptPreferences`.
+- **Relocation of Script Width & Focus Line Controls to Studio Settings (`src/components/header/SettingsMenuDropdown.tsx`, `src/components/ScriptHeaderControls.tsx`, `src/components/AppHeader.tsx`, `src/App.tsx`)**:
+  - Relocated the bulky **Script Width** (5 presets) and **Scroll Focus Line** (3 presets) dropdown menus out of `ScriptHeaderControls.tsx` and into the global Studio Settings menu (`SettingsMenuDropdown.tsx`).
+  - Added a dedicated "Reading Canvas & Viewport" section to Studio Settings featuring compact, studio-grade segmented controls:
+    - 5-segment Script Width row with progressive visual width bar glyphs and dynamic header text (`{label} ({width_px})`).
+    - 3-segment Scroll Focus Line row with miniature viewport device icons (`Top`, `Center`, `Bottom`) and active amber indicators.
+  - Decluttered the desktop Script Preview header down to an ultra-clean layout housing only `[FileText] Script Preview` and `[🎯 AUTO-SCROLL | ▾]` split button, reducing `ScriptHeaderControls.tsx` from 395 to 180 lines (~54% line reduction) while preserving quick tools on mobile.
+- **Preset Lookup Centralization & Type Safety (`src/constants/script.ts`, `src/components/header/SettingsMenuDropdown.tsx`)**:
+  - Exported `DEFAULT_SCRIPT_WIDTH_PRESET`, `DEFAULT_SCROLL_FOCUS_PRESET`, and typed lookup helpers `getScriptWidthPreset(id)` and `getScrollFocusPreset(id)` with guaranteed default fallbacks.
+  - Replaced repetitive and brittle `.find() || .find() || [0]` fallback ladders across `SettingsMenuDropdown.tsx` and `useAutoScroll.ts` with clean, self-guaranteeing helpers.
+- **DRY Target Scroll Offset Calculation (`src/hooks/useAutoScroll.ts`)**:
+  - Extracted and exported pure `calculateTargetScrollTop(relativeTop, containerHeight, elementHeight, isDesktop, focusRatio)`.
+  - Unified the duplicate viewport offset math between user clicks on the scroll focus line presets (`applyScrollFocus`) and the active cue playback scroll loop.
+- **Scoped `STORAGE_KEYS` Dictionary & Callback Simplification (`src/hooks/useScriptPreferences.ts`, `src/App.tsx`, `src/components/AppHeader.tsx`)**:
+  - Replaced 8 raw `sceneflow_*` string literals repeated across getters and setters with a centralized `SCRIPT_PREFERENCES_STORAGE_KEYS` object.
+  - Removed redundant inline `localStorage.setItem('sceneflow_script_theme', themeId)` wrappers in `ScriptColorModal` and `MobileColorModal`, simplifying callers to `onSelectTheme={setScriptThemeId}`.
+  - Removed vestigial `onCycleThemeMode` prop through `AppHeader` and `SettingsMenuDropdown` (superseded by the 4-theme segmented picker).
+
+### Fixed
+- **Mobile Playback Viewport & Script Visibility Fix (`src/components/left-panel/WorkstationLeftPanel.tsx`)**:
+  - Scoped `h-full overflow-hidden` strictly to Edit Mode (which requires full-height on mobile to display cue management) and desktop viewports (`lg:h-full lg:overflow-hidden`).
+  - Restored `shrink-0 sticky top-0 z-30 shadow-md border-b` on mobile in Playback Mode, preventing the unified workstation left panel from expanding to 100% viewport height with empty space while Tier 2 (`ActiveHighlightsPanel`) is hidden on handheld screens.
+  - Restored instant visibility and uninterrupted auto-scrolling of the screenplay (Center Panel) directly beneath the pinned video player on mobile devices.
+- **Cue Timing Inputs Coercion & Backspace Deletion Bugfix (`src/components/edit/CueTimingInputs.tsx`)**:
+  - Fixed backspace input behavior on numeric start/end time and index inputs where clearing characters coerced empty strings into `0` (which previously dumped thousands of characters from offset 0 into the cue editor).
+  - Adopted semantic design tokens (`focus:ring-border-main`, `bg-surface`) replacing hardcoded Tailwind utilities.
+- **Cue Text Section Accessibility & Fallbacks (`src/components/edit/CueTextSection.tsx`)**:
+  - Upgraded dark mode contrast on active alternative match pills (`bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-400 font-bold`).
+  - Added fallback feedback ("No additional occurrences found in script") when alternative search returns $\le 1$ match.
+  - Aligned parameter types with canonical `AlternativeLocation` interface.
+- **Player Timing & State Reset on Project Load (`src/hooks/useYouTubePlayer.ts`, `src/App.tsx`)**:
+  - Implemented `resetPlayback` in `useYouTubePlayer` to clear running interval timers, zero `currentTime`, reset `playerState` to idle (-1), and pause and seek the active player to 0:00.
+  - Tracked active player instance via mutable `playerRef` to prevent stale interval closures from polling and restoring previous playback timestamps.
+  - Automatically triggered `resetPlayback` upon `youtubeId` change and synchronously across all project loaders (built-in examples, blank canvas, starter guide, remote links, and JSON file import), ensuring timeline ruler, playhead, and auto-scroll cleanly initialize to `00:00`.
+- **Split Header Container Query Calibration & Script Toolbar Streamlining (`src/index.css`, `src/components/ScriptHeaderControls.tsx`, `src/components/RawScriptModal.tsx`)**:
+  - Raised Left Panel button label collapse threshold from 580px to 680px in `index.css`, eliminating horizontal button overflow and `Hide Video` label clipping in Edit Mode.
+  - Decoupled all workstation section headers with independent container query thresholds accounting for container padding:
+    - Playback MediaHeader: 640px (title & button labels), 480px (duration).
+    - Edit MediaHeader: 580px (title), 510px (button labels), 430px (YouTube pill text & duration).
+    - Sync Cues Toolbar: 510px (title, secondary labels, scroll label), 420px (density & filter labels).
+    - Center Script Panel: 480px (cue status text), 420px (button labels & line count), 320px (script title).
+  - Relocated active cue status badge (`Editing Cue` / `Drafting Cue`) and line count to the left side beside the title in `ScriptHeaderControls`, leaving action controls cleanly focused on the right.
+  - Removed redundant `Idle` status placeholder badge from the script header.
+  - Renamed "Edit Raw" button and modal title to "Edit Source" and "Source Screenplay" for conceptual consistency with screenplay authoring.
+- **Desktop Auto-Scroll Dropdown Viewport Cutoff (`src/components/ScriptHeaderControls.tsx`)**:
+  - Fixed an offscreen cutoff bug where the Auto-Scroll "Focus Mode" dropdown used static left-anchoring (`left-0`), causing its 176px container to extend 36px+ past the right edge of the window frame / right panel on desktop. Applied responsive anchoring (`left-0 lg:left-auto lg:right-0`), anchoring cleanly to the right edge of the toolbar button on desktop while preserving left-anchoring on mobile.
+- **Scroll Focus Dropdown Auto-Close (`src/components/ScriptHeaderControls.tsx`)**:
+  - Fixed an omission where selecting a viewport scroll focus line preset failed to dismiss the dropdown menu, ensuring consistent auto-close behavior identical to the width preset dropdown.
+- **Dead Ternary Description Fallbacks (`src/components/ScriptHeaderControls.tsx`)**:
+  - Resolved dead ternary logic in width and scroll focus preset description labels (`isSelected ? "text-text-faint" : "text-text-faint"`), applying distinct high-legibility styling (`text-btn-primary-text/80`) when selected.
+- **Double-Click Menu Dismissal & Adjacent Button Swallowing (`src/hooks/useClickOutside.ts`, `src/components/header/*`, `src/components/ScriptHeaderControls.tsx`)**:
+  - Eliminated transparent full-screen backdrops (`fixed inset-0 z-40`) that previously swallowed clicks on adjacent buttons when closing menus, enabling instant 1-click menu switching and button activation across both `AppHeader` and `ScriptHeaderControls`.
+  - Upgraded `ScriptHeaderControls` dropdowns (Auto-Scroll Focus, Width Presets, Scroll Focus Line) to use `useClickOutside` and `useEscapeKey`, removing click interception on adjacent controls.
+- **Mobile Viewport Edit-Mode Header Leak (`src/components/AppHeader.tsx`)**:
+  - Resolved an issue where edit mode allowed the desktop header to render on mobile viewports by enforcing unconditional `hidden lg:flex` on `AppHeader`.
+- **Black Screen on Cue Selection in Edit Mode (`src/hooks/useCueEditor.ts`, `src/hooks/useYouTubePlayer.ts`)**:
+  - Resolved an issue where selecting any sync cue on an unstarted or paused YouTube player rendered a black viewport.
+  - Eliminated premature `player.pauseVideo()` calls immediately following `player.seekTo()` that were aborting the browser's video decoding pipeline before frame buffer initialization.
+- **Edit Mode Playback Lag & Decoupling (`src/App.tsx`, `src/components/edit/EditLeftPanel.tsx`, `src/components/edit/SyncCueCard.tsx`, `src/components/edit/SyncCueRow.tsx`)**:
+  - Memoized `leftPanelStyle` in `App.tsx` to stop breaking `React.memo(EditLeftPanel)` on high-frequency 10Hz playback clock ticks.
+  - Hoisted theme color resolution (`resolveCueColor`) out of individual cue card render loops, eliminating thousands of redundant hook calls per second.
+  - Added CSS `content-visibility: auto` with `contain-intrinsic-size` on the scrollable cue list, allowing the browser engine to skip offscreen layout and paint recalculations.
+- **Vertical Spacing Asymmetry Around Sync Cues Header (`src/components/edit/EditLeftPanel.tsx`, `src/components/edit/SyncCuesToolbar.tsx`, `src/components/edit/SyncCuesPanel.tsx`)**:
+  - Resolved an unintended ~32px empty void above the `SYNC CUES` header caused by compounding uncollapsed margins and paddings across `VideoSplitDivider`, the Tier 2 container, and toolbar wrappers.
+  - Tightened divider bottom margin (`className="mt-2 mb-1"`), eliminated redundant Tier 2 top padding (`pt-0`), balanced toolbar padding to symmetric `py-2`, and matched cue list top padding (`pt-2.5`) to create harmonious, proportional vertical separation.
+- **Narrow Split Panel Horizontal Overflow (`src/components/playback/PlaybackLeftPanel.tsx`)**:
+  - Removed duplicate static `Video Hidden` badge in `PlaybackLeftPanel` header that caused horizontal text squishing and overflow when the panel was dragged narrow.
+
+## [2.3.2] - 2026-09-12
+
+### Added
+- **Memoized Line-Level Screenplay Component (`src/components/script/ScriptLine.tsx`)**:
+  - Extracted screenplay line rendering into a dedicated, highly optimized `<ScriptLine />` component wrapped in `React.memo` with a custom `areScriptLinePropsEqual` comparator.
+  - Automatically skips virtual DOM and rendering cycles for lines with no cues (~95% of a screenplay) during video playback.
+  - For lines with overlapping cues, conditionally re-renders only when a cue in that specific line becomes active, transitions fade-in / fade-out opacity, or exits its playback window, reducing React reconciliation work by over 95%.
+- **Analog Cue Highlight Fading & Box-Shadow Interpolation (`src/components/script/ScriptLine.tsx`)**:
+  - Integrated GPU CSS transitions (`transition: background-color 100ms linear, box-shadow 100ms linear`) during playback mode, transforming discrete 100ms opacity steps into continuous analog lighting transitions without CPU overhead.
+
+### Refactored
+- **Decoupled Screenplay Parsing from High-Frequency Playback Loop (`src/App.tsx`)**:
+  - Isolated `processScript(state.scriptText)` into an independent `processedLines` memoized hook (`useMemo(..., [state.scriptText])`), eliminating continuous regex and token re-parsing on every 100ms playback clock tick.
+  - Implemented `cuesByLineIndex` to pre-index overlapping cues per line index, replacing $O(\text{lines} \times \text{cues})$ array filter sweeps with instant $O(1)$ lookups per line.
+- **Reference-Stable Active Cue Categories (`src/App.tsx`)**:
+  - Stabilized `activeCueTypes` `Set<string>` reference across 100ms timer ticks, preserving shallow object equality when active categories are unchanged and preventing unnecessary re-renders in `PlaybackLeftPanel`.
+- **Dormant Paused Inspector Filtering (`src/components/active-highlights/views/HighlightTimelineView.tsx`)**:
+  - Short-circuited `activeCuesUnderPlayhead` cue filtering during active playback while the inspector card is unmounted, eliminating redundant background array sweeps.
+- **Frame-Aligned Auto-Scroll Scheduling & Deadband Guard (`src/hooks/useAutoScroll.ts`)**:
+  - Replaced arbitrary 50ms `setTimeout` execution with `requestAnimationFrame` and a lifecycle-guarded cancellation ref (`rafRef`).
+  - Aligns scroll position calculations (`container.scrollTo({ behavior: 'smooth' })`) directly with the browser's refresh rate (vsync) and cancels stale pending scroll requests on rapid cue transitions, eliminating layout thrashing and stutter.
+  - Added a 10px scroll distance deadband to prevent micro-scroll jitter when consecutive cues trigger on the same line.
+
+### Fixed
+- **Layout Divider Drag Unselection & Gesture Drop Fix (`src/components/playback/VideoSplitDivider.tsx`, `src/components/common/SplitPaneDivider.tsx`)**:
+  - Replaced element-confined pointer capture with global window-level event subscriptions (`pointermove`, `pointerup`, `pointercancel`) during drag operations, ensuring panel resizing never drops or unselects when the cursor sweeps rapidly across the viewport or into cross-origin YouTube `<iframe>` boundaries.
+  - Added `touch-none` (`touch-action: none`) and `select-none` to both dividers and the full-screen overlay guard, preventing Windows Precision Touchpad and touch gestures from mistaking layout drag gestures for vertical scrolling/panning and firing premature `pointercancel` events.
+  - Implemented deadband elimination on boundary clamping in `VideoSplitDivider`: dynamically re-anchors the reference coordinate when mouse movement travels past the 160px minimum or 480px maximum limits, ensuring the resizer responds immediately when reversing drag direction.
+  - Added `onLostPointerCapture={stopDragging}` fallbacks and explicit cleanup of pointer captures upon drag termination to prevent desynchronized drag states.
+
+## [2.3.1] - 2026-09-11
+
+### Added
+- **Substack Introduction Article Integration & Centralized External Links (`src/constants/links.ts`, `src/components/AppHeader.tsx`, `src/components/ScriptHeaderControls.tsx`, `src/components/AppInfoModal.tsx`)**:
+  - Added direct links to the official deep-dive article (*[Introducing SceneFlow: Script-to-Screen Synchronization](https://taruma.substack.com/p/sceneflow-script-to-screen)*) on Substack (*Grounded Hallucinations* by Taruma Sakti).
+  - **Desktop Header Action Pill (`AppHeader.tsx`)**: Positioned an `[Article]` pill to the left side of `[Guide]`, strictly consuming `UI_TOKENS.button.actionPill` and responsive typography (`<span className="hidden xl:inline">Article</span>`) to harmonize with all application shell theme presets.
+  - **Mobile Screenplay Header Icon Button (`ScriptHeaderControls.tsx`)**: Placed an icon-only `<Newspaper size={12} />` button to the left of `[Library]`, preserving mobile horizontal headroom with accessible `title` and `aria-label` tags.
+  - **Featured Article Card (`AppInfoModal.tsx`)**: Designed a structured hero-level card in the desktop info dialog above the 2x2 resource grid, featuring a top metadata bar (`[SUBSTACK ARTICLE]` badge + `Read Article ↗` link) and a dedicated full-width title and summary section.
+  - **Centralized Links Configuration (`src/constants/links.ts`)**: Centralized `EXTERNAL_LINKS` (`article`, `articleTitle`, `kofi`, `github`, `docs`, `changelog`, `author`) to eliminate redundant hardcoded URL strings across the app shell.
+- **Vector Field [AI Scenes] Example Project (`public/examples/scenes/scene_vector_field.json`, `src/examples.ts`, `SCENEFLOW_CATALOGUE.md`)**:
+  - Registered new high-concept cyberpunk sci-fi AI Scene example *Vector Field* (`scene_vector_field`) generated with Seedance 2.0.
+  - Features 32 synchronized cues across dialogue, action, shots, camera angles, and soundscapes with complete scene prompt metadata.
+
+### Changed
+- **Screenplay Visual Themes Modal Compact 2-Column Redesign & Checkmark Occlusion Fix (`src/components/ScriptColorModal.tsx`)**:
+  - Redesigned the desktop theme presets layout from a 3-column grid (`lg:grid-cols-3`) to a compact, responsive 2-column grid (`grid-cols-1 sm:grid-cols-2`), eliminating vertical viewport scrolling on standard desktop displays.
+  - Consolidated top controls: Repositioned the **Pure Black Canvas (Video Overlay Mode)** toggle from the bottom of the modal up to the header tier alongside the **Cue Palette Accessibility Profile** selector into a unified 2-column options bar.
+  - Resolved checkmark occlusion bug where the selected state badge (`absolute top-2 right-2`) collided with and obscured the right edge of the theme category badge (`LIGHT`, `DARK`, `WARM`). Moved the checkmark indicator into natural flex flow beside the theme badge (`[LIGHT] [✓]`).
+  - Optimized vertical density across modal header (`px-4 py-3 sm:px-6 sm:py-3.5`), tabs, body spacing (`p-3.5 sm:p-4 space-y-3`), swatch cards (`p-2.5 sm:p-3`), single-line descriptions (`line-clamp-1`), live script preview paper (`p-2 text-[9px]`), and active theme summary strip.
+- **Starter Guide Script & Onboarding Tutorial Synchronization (`docs/_dropbox/guide.txt`, `public/examples/blank.json`)**:
+  - Synchronized the instructional guide reference (`docs/_dropbox/guide.txt`) and starter tutorial project (`public/examples/blank.json`) with SceneFlow v2.3.0 capabilities.
+  - Documented modern workspace features: Multi-Track Sync Timeline (35% anticipation playhead, continuous timecode ruler, zoom presets `4s | 8s | 16s`, `Flex` / `Fixed` track height modes, lane mute toggles), Paused Inspector card with instant Replay, Screen Recording Mode (<kbd>V</kbd>), Dual-Axis Splitters, Studio VU Meter, Pure Black Canvas (Video Overlay Mode), CVD Accessibility palettes, and global keyboard shortcuts.
+  - Corrected legacy UI references: updated cue creation to the left sidebar "New Sync Cue" panel with clock timestamp snapping and in-place monospace text editing, multi-select Focus Mode, and curated 4-tier Library catalogue sections.
+  - Re-anchored cue character offsets (`startIndex` / `endIndex`) across all 100+ cues in `public/examples/blank.json` to maintain frame-accurate timeline synchronization with the updated guide text, and upgraded legacy cue color classes to canonical v2.3.0 tokens (`bg-blue-500/50`, `bg-indigo-400/50`).
+
+### Fixed
+- **Timing Settings General Master Offset Dark Mode Contrast & Design System Alignment (`src/components/TimingSettingsModal.tsx`, `src/styles/tokens/ui.ts`)**:
+  - Resolved an inverted contrast bug in the Timing Settings modal where the "General Master Offset" card was hardcoded with static light-mode utilities (`bg-blue-50 border-2 border-blue-100`), creating a blinding white container with pitch-black input boxes (`bg-surface`) in Dark Mode.
+  - Centralized `UI_TOKENS.panel.accentCardBlue` (`p-6 bg-blue-500/10 border border-blue-500/20 rounded-3xl space-y-4`) to provide consistent alpha-translucent accent panel styling across Light, Warm, Dark, and Pure Black App Shell themes.
+  - Aligned `UI_TOKENS.input.numberBoxLg` by replacing hardcoded `border-2 border-blue-100` with theme-calibrated `border border-blue-500/30 focus:border-blue-500`, ensuring clean definition without stark pale outlines on dark surfaces.
+  - Updated master offset header typography to `text-blue-500` and helper description to `text-text-muted italic` for guaranteed legibility across all shell themes.
+- **Auto-Scroll Split Button Geometry & Unified Palette (`src/components/ScriptHeaderControls.tsx`)**:
+  - Resolved a height mismatch where the right dropdown chevron button was shorter than the main Auto-Scroll toggle button, creating an unsightly stepped lip at the top and bottom edges.
+  - Replaced parent container `items-center` with `items-stretch` and centered the chevron icon (`flex items-center justify-center`), ensuring both halves stretch to equal height.
+  - Unified the active background (`bg-blue-500`) and border styling across both buttons, removing the jarring two-tone color contrast and adding a crisp 1px inner divider border (`border-l`).
+- **Auto-Scroll Focus Dropdown Alignment & Offscreen Overflow Fix (`src/styles/tokens/ui.ts`)**:
+  - Fixed an alignment bug where `UI_TOKENS.dropdown.menu` used `right-0`, anchoring the dropdown to the right edge of the Auto-Scroll button and expanding 176px (`w-44`) to the left, which caused the dropdown to clip off the left screen edge on mobile devices.
+  - Updated `UI_TOKENS.dropdown.menu` to `left-0` (and added `menuLeft` and `menuRight` tokens), ensuring the menu drops down aligned to the button's left edge and remains completely visible within mobile viewports.
+- **Mobile Playback Header Density & Theme Icon Button (`src/components/ScriptHeaderControls.tsx`)**:
+  - Streamlined the mobile playback header by transitioning the Theme trigger from a text-and-icon button (`<Palette size={10} /> Theme`) into a compact icon-only control (`<Palette size={12} />`), reclaiming ~35px of horizontal space and creating visual consistency with the Ko-fi support pill and desktop theme buttons.
+- **Auto-Scroll Focus Category Uppercase Typography (`src/components/ScriptHeaderControls.tsx`)**:
+  - Replaced CSS `capitalize` with `uppercase tracking-wider` for category labels in the Auto-Scroll "Focus Mode" dropdown.
+  - Aligned category labels with industry-standard screenplay cue formatting (ALL CAPS) and resolved the title-case acronym artifact where VFX was displayed as "Vfx".
+- **Auto-Scroll Dropdown & Timing Settings Dynamic Cue Color Resolution (`src/components/ScriptHeaderControls.tsx`, `src/components/TimingSettingsModal.tsx`, `src/App.tsx`)**:
+  - Resolved an omission from the v2.3.0 cue palette overhaul where category indicator dots inside the Auto-Scroll "Focus Mode" dropdown in `ScriptHeaderControls.tsx` were left using static fallback classes (`color.class`) with translucent 50% opacity (`bg-.../50`), bypassing the active script theme and the Protanopia CVD palette profile.
+  - Wired `scriptThemeId` and `cuePaletteProfile` down through `ScriptHeaderControlsProps` and `TimingSettingsModalProps` from `App.tsx`.
+  - Replaced static dot classes with theme-calibrated `themed.dotColor` (`getCueColorForTheme`), enhanced dot geometry to `w-2 h-2 rounded-full shrink-0 shadow-2xs`, and added an active white ring (`ring-1 ring-white/40`) when selected so category dots never wash out against the primary blue selection background.
+  - Aligned `TimingSettingsModal.tsx` category grid indicator dots to similarly resolve `themed.dotColor` dynamically with the active script theme and accessibility profile.
+
+## [2.3.0] - 2026-09-10
+
+### Added
+- **Cue Palette Accessibility Profile & Protanopia/Deuteranopia Safe Mode (`src/styles/tokens/cues.ts`, `src/components/ScriptColorModal.tsx`, `src/components/MobileColorModal.tsx`, `src/hooks/useScriptPreferences.ts`)**:
+  - Added an opt-in **Cue Palette Accessibility Profile** selector (`CuePaletteProfile`: `'standard' | 'protanopia'`) directly inside both desktop `ScriptColorModal` and `MobileColorModal`.
+  - **Protanopia & Deuteranopia Accessibility**: Solved Red-Green Color Vision Deficiency where Indigo and Blue collapse into identical hues due to reduced L/M cone sensitivity, by remapping **Shot** to **Deep Wine / Burgundy** (`rgb(136, 19, 55)` in light paper / `rgb(225, 29, 72)` in dark paper). In Protanopia, this registers as a warm, rich chocolate-wine tone ($L^* \approx 25$) with massive luminance separation from **Action Blue** ($L^* \approx 50$), eliminating blue-indigo ambiguity.
+  - **High-Luminance Ice Aqua & Vermilion Coral**: Saturated **Action** to firm Cobalt Blue (`rgb(37, 99, 235)`), elevated **VFX** to radiant high-luminance Ice Aqua (`rgb(103, 232, 249)` in dark themes, $L^* \approx 85$), and calibrated **Transition** to warm Vermilion Coral (`rgb(234, 88, 12)`).
+  - **Instant Live Synchronization & Persistence**: Switching profiles immediately updates the screenplay text highlights, multi-track timeline lanes, Active Highlights VU meter and cards, and modal inspector swatches, persisted across sessions in `localStorage` (`sceneflow_cue_palette_profile`).
+- **Harmonized 360° Standard Cue Color Palette Overhaul (`src/styles/tokens/cues.ts`, `src/styles/helpers.ts`, `src/lib/cueUtils.ts`)**:
+  - Overhauled the default 8-category screenplay cue palette to distribute all categories evenly across the 360° color wheel, eliminating pastel hue crowding between Shot, Transition, and VFX.
+  - **Transition (Crimson Rose `bg-rose-500/50`)**: Replaced ambiguous soft pastel pink (`bg-pink-400`) with crisp Crimson Rose (`rgb(244, 63, 94)`), introducing an authoritative editorial cut mark that never blurs into purple.
+  - **Shot (Deep Iris / Indigo `bg-indigo-400/50`)**: Shifted from lilac purple to Deep Iris (`rgb(129, 140, 248)`), providing framing cues (CU, Wide, POV) with a deliberate architectural cool tone.
+  - **VFX (Electric Aqua `bg-cyan-400/50`)**: Calibrated to sharp Electric Aqua (`rgb(6, 182, 212)` light / `rgb(34, 211, 238)` dark), removing previous dark-mode teal drift (`rgb(45, 212, 191)`) that previously clashed with camera emerald green.
+  - **Action & Camera Buffer Widening**: Deepened **Action** to Royal Cobalt Blue (`bg-blue-500/50`, `rgb(59, 130, 246)`) and **Camera** to crisp Emerald Green (`bg-green-500/50`, `rgb(34, 197, 94)`).
+  - **Backward Compatibility Engine (`LEGACY_CLASS_MAP`)**: Added seamless fallback normalization for older script files and localStorage states referencing legacy classes (`bg-purple-400/50`, `bg-pink-400/50`, `bg-blue-400/50`, `bg-green-400/50`), automatically upgrading them to the new canonical color classes on edit.
+- **Theming & Video Overlay Invariants Rule (`.agents/rules/theming-and-overlay-invariants.md`, `docs/AGENTS.md`)**:
+  - Codified the two-tier theming independence invariant ensuring that App Shell theme modes (`themeMode`) and Script Paper presets (`scriptThemeId`) remain decoupled without cross-layer visual leakage.
+  - Documented video compositing and screen recording invariants: absolute `#000000` luminance requirements, fuzzy drop shadow removal, 1px paper border preservation, artifact suppression (hole punches, heading fills), and non-destructive dark theme scoping.
+- **Pure Black Canvas / Video Overlay Mode (`src/components/ScriptColorModal.tsx`, `src/components/MobileColorModal.tsx`, `src/hooks/useScriptPreferences.ts`, `src/index.css`)**:
+  - Added an opt-in **Pure Black Canvas (Video Overlay Mode)** toggle inside both desktop `ScriptColorModal` and `MobileColorModal`, explicitly designed for screen recording and NLE compositing using **Screen** or **Lighten** blend modes.
+  - **Dark-Theme-Scoped True Black (`#000000`)**: When enabled alongside dark themes (`Midnight Slate`, `OLED Blackout`, `Navy Slate`), forces absolute `#000000` (RGB: `0, 0, 0`) backgrounds across the entire workspace (`--app-bg`, `--surface`, `--surface-dark`), eliminating the milky grey box or foggy wash caused by off-black values (`#0c0a09` / `#18181b`) in video overlay blending.
+  - **Paper Border Preservation & Shadow Stripping**: Automatically removes fuzzy drop shadow halos (`!shadow-none`) to prevent blurred boundary artifacts during screen capture, while cleanly preserving the 1px paper border (`activeTheme.paperBorder`) to maintain manuscript framing.
+  - **Distraction-Free Manuscript Elements**: Hides decorative hole-punches (`display: none`), neutralizes scene heading banner strips to transparent (`script-heading-banner`), and renders brief summary cards on pure black (`script-brief-card`), preventing unintended background blocks from appearing over video footage.
+  - **Full-App Overlay Alignment**: Extends `#000000` background styling to the left panel, category filter pills (`HighlightFilterBar`), and horizontal multi-track timeline lanes (`.timeline-track-field`), allowing creators to screen record cropped sections of the timeline or category badges with 100% background transparency.
+  - **Decoupled Paper vs. Shell Theme Scope**: Completely decoupled script paper pure black styling from the application shell's theme mode. When Auto Color is turned off (e.g. setting the app shell explicitly to Light or Warm), selecting a dark script theme in the Color Modal still renders pure `#000000` canvas and paper independently, and vice-versa, ensuring theme independence without cross-layer visual leakage.
+  - **Light/Warm Theme Safety**: Non-destructive behavior that strictly leaves light and warm themes (`Studio Crisp`, `Warm Parchment`, `Newsprint`) completely untouched; switching back to dark themes automatically re-engages pure black rendering.
+  - **Session Persistence**: Stored in `localStorage` (`sceneflow_pure_black_bg`) to preserve creator preferences across browser sessions.
+- **Persistent Playback Header Transport Controls (`src/components/playback/PlaybackLeftPanel.tsx`, `src/App.tsx`)**:
+  - Added dedicated, ergonomic playback transport controls directly in the `PlaybackLeftPanel` header alongside the video collapse toggle.
+  - **Play / Pause Toggle**: Integrated a dynamic transport button displaying `Play` or `Pause` with distinct icons and active accent styling, synchronized with player state and keyboard shortcuts (<kbd>Space</kbd> / <kbd>K</kbd>).
+  - **Replay From Beginning (`0:00`)**: Added a single-click `Replay` button (`RotateCcw`) that instantly seeks to `0:00` and begins playback without paused-seek suppression guards interfering.
+  - **Unobstructed Media Control**: Transport controls remain persistently mounted and fully operable even when the video player is collapsed (`isVideoCollapsed`), providing seamless audio control during timeline screen recording.
+  - **Responsive Layout**: Button labels collapse gracefully to compact icon-only buttons on small viewports (`hidden sm:inline`), preventing header wrapping or layout shifts.
+- **Collapsible Video Player in Playback Mode (`src/components/playback/PlaybackLeftPanel.tsx`, `src/hooks/useScriptPreferences.ts`, `src/hooks/useKeyboardShortcuts.ts`)**:
+  - Added the ability to hide/collapse the YouTube video player in Playback Mode, providing an unobstructed full-height viewport for the Multi-Track Sync Timeline specifically tailored for timeline screen recording and video analysis.
+  - **Zero-Height Audio & Sync Continuity**: Implemented zero-height CSS clipping (`h-0 min-h-0 max-h-0 opacity-0 pointer-events-none !m-0 !p-0 overflow-hidden`) keeping the `<YouTube>` iframe mounted in the DOM, guaranteeing uninterrupted audio playback, real-time playhead advancement, cue highlighting, and screenplay auto-scroll.
+  - **Interactive Playback Header Controls**: Added a header toggle button (`[ Hide Video ]` ⇋ `[ Show Video ]`) with distinct visual feedback, an animated amber status pill (`Video Hidden`) when collapsed, and automatic suppression of the vertical `VideoSplitDivider` handle.
+  - **Global Keyboard Shortcut (`V`)**: Bound the <kbd>V</kbd> key to toggle video visibility instantly during playback when not typing in text fields, with tooltip hints and documentation in `AppInfoModal`.
+  - **Layout State Persistence & Reset Integration**: Stored collapsed state in `localStorage` (`sceneflow_playback_video_collapsed`), wired into `isViewCustomized` indicator logic, and unified with the header "Reset View" button to restore default video visibility in one click.
+- **Multi-Track Sync Timeline (`src/components/active-highlights/`)**:
+  - Re-architected the playback Active Highlights panel from vertical cards into a modern, zero-layout-shift horizontal multi-track sync timeline inspired by NLEs and DAWs.
+  - **Stationary Anticipation Playhead (`TimelinePlayheadRuler.tsx`)**: Anchored at 35% from the left edge with a glowing vertical laser marker and pip, giving visual room for upcoming dialogue anticipation.
+  - **Sliding Continuous Timecode Ruler (`TimelinePlayheadRuler.tsx`)**: Dynamically renders 1-second ticks and major MM:SS labels smoothly gliding in real-time.
+  - **Deterministic Global Sub-Lane Stacking (`useTimelineWindow.ts`)**: Implemented greedy interval scheduling across all script cues to assign fixed, permanent sub-lane indices, completely eliminating vertical row-jumping or card juggling during scrubbing and playback.
+  - **Docked Paused Cue Inspector (`PausedInspectorCard.tsx`)**: Automatically docks below the timeline whenever playback is paused or a cue block is clicked, featuring multi-cue tab switching, category-themed badges, large serif italic screenplay quotes, precision timestamps (`MM:SS.s`), and a dedicated "Replay" action.
+  - **Segmented View Mode Switcher (`ActiveHighlightsPanel.tsx`)**: Added a persistent header toggle (`[ 📊 Timeline | 🗂 Cards ]`) stored in `localStorage` (`sceneflow_highlight_view_mode`), allowing users to switch between the modern multi-track timeline and the classic floating cards view at any time.
+  - **Active Highlights Header Redesign & Studio VU Meter (`ActiveHighlightsPanel.tsx`)**:
+    - Re-architected the panel header into a unified two-column layout: left side groups the section title with the active counter, while the right side consolidates interactive toolbar controls.
+    - **Studio VU Meter (Fixed-Slot Category LED Strip)**: Implemented an 8-slot category LED indicator strip (`Dialogue`, `Action`, `Camera`, `Shot`, `Audio`, `VFX`, `Transition`, `Environment`) anchored beside the count, illuminating dynamically in theme-calibrated colors (`resolveCueColor`) with zero layout shift during playback.
+    - **Jitter-Free Numerical Isolation**: Isolated the active cue counter in a dedicated fixed-width slot (`min-w-[14px] font-mono tabular-nums`), preventing horizontal width jumping when cue counts oscillate between single and double digits.
+    - **Collapsible Filter Drawer**: Converted the 8-category pill filter bar into a smoothly collapsible drawer (`max-h-32 opacity-100` ⇋ `max-h-0 opacity-0`), reclaiming ~35–40px of vertical space for the timeline tracks.
+    - **Persistent Toolbar Button & Mute Indicator**: Added a dedicated `Filters` button to the right toolbar with `localStorage` memory (`sceneflow_highlight_filter_expanded`) and an animated pulsing dot indicator when any categories are actively muted.
+  - **Timeline Window Zoom Presets (`src/components/active-highlights/`)**:
+    - Added discrete zoom window presets (`4s`, `8s`, `16s`) to the Multi-Track Sync Timeline, allowing users to alternate between close-up dialogue inspection and macro scene overview.
+    - **Context-Aware Header Controls (`ActiveHighlightsPanel.tsx`)**: Placed a compact segmented preset switcher (`[ 4s | 8s | 16s ]`) immediately to the left of the `Filters` toggle button, conditionally visible only in Timeline view and persisted in `localStorage` (`sceneflow_timeline_zoom_preset`).
+    - **Adaptive Timecode Ruler (`useTimelineWindow.ts`)**: Dynamically scales tick frequency and label intervals (1s labels for `4s`, 2s labels for `8s`, and 2s ticks / 4s labels for `16s`), completely preventing horizontal label collisions and eliminating unnecessary DOM elements at wide zoom levels.
+    - **Narrow Block Visual Optimization (`TimelineCueBlock.tsx`)**: Automatically centers category indicator dots and hides clipped snippet text on narrow blocks (`widthPercent < 3.5%`) during wide zooms, keeping the full cue text accessible on hover tooltip.
+  - **Fixed vs. Flexible Track Height Mode (`src/components/active-highlights/`)**:
+    - Introduced `TimelineHeightMode` (`'flexible' | 'fixed'`) allowing users to choose between dynamic track expansion and pre-allocated zero-layout-shift track heights.
+    - **Per-Category Pre-Allocation (`useTimelineWindow.ts`)**: In `Fixed` mode, tracks pre-calculate their maximum simultaneous overlapping cues across the entire script (`globalMaxSubLane + 1`), locking track heights (e.g. Dialogue at 2 rows) and displaying horizontal sub-lane dividers from `00:00` without vertical layout shift during playback.
+    - **Context-Aware Segmented Toggle (`ActiveHighlightsPanel.tsx`)**: Added `[ Flex | Fixed ]` segmented buttons situated immediately to the left of the time window zoom switcher in the header toolbar, conditionally visible only in Timeline view and persisted in `localStorage` (`sceneflow_timeline_height_mode`).
+    - **Track Height Stability (`TimelineLane.tsx`)**: Forwarded `totalSubLanes` from category-level metadata to `TimelineLane`, ensuring empty lanes maintain pre-allocated track heights and dividers even when no cues are currently visible in the active time window.
+  - **High-Craft Sub-Package Modularization**: Fully decomposed the monolithic highlights component into a dedicated, modular folder structure (`src/components/active-highlights/`) with a public API barrel export (`index.ts`), clean contracts (`types.ts`), headless calculation hook (`useTimelineWindow.ts`), and isolated track primitives (`TimelineLane.tsx`, `TimelineCueBlock.tsx`).
+- **Draggable Asymmetric Split Pane (`src/components/common/SplitPaneDivider.tsx`, `src/hooks/useScriptPreferences.ts`, `src/App.tsx`)**:
+  - Replaced the rigid 50/50 desktop split with an interactive, draggable split divider, defaulting to a calibrated **42% Video / 58% Script** ratio (clamped between 30% and 65%) and persisted in `localStorage` (`sceneflow_split_ratio`).
+  - Added desktop-only `SplitPaneDivider` component with direct pointer capture, transparent iframe drag guard, keyboard arrow adjustment, and double-click reset.
+  - Implemented `requestAnimationFrame` hardware VSync throttling and `.is-resizing-split` CSS transition suppression, delivering 60–144fps lag-free resizing.
+  - Decoupled real-time in-memory drag state updates from disk I/O, writing to `localStorage` only upon drag release (`commitSplitRatio`).
+- **Vertical Video ⇕ Timeline Split Divider & Proportional Sizing (`src/components/playback/VideoSplitDivider.tsx`, `src/components/playback/PlaybackLeftPanel.tsx`, `src/hooks/useScriptPreferences.ts`)**:
+  - Replaced the manual percentage `Size` slider with an interactive desktop horizontal split handle (`VideoSplitDivider`) positioned directly between the Video Player and the Active Highlights timeline.
+  - Implemented direct vertical height resizing (default: `240px`, clamped between `160px` and `480px`) with automatic 16:9 proportional aspect scaling (`aspect-video`), completely eliminating dead horizontal gutters and preserving true video geometry.
+  - Replaced the cluttered "NOW PLAYING" slider row with a minimal, uppercase tracked `PLAYBACK` section header (`UI_TOKENS.layout.sectionTitle`), establishing visual consistency with `ACTIVE HIGHLIGHTS` and `SCRIPT PREVIEW`.
+  - Added high-performance pointer capture, `requestAnimationFrame` hardware VSync throttling, iframe pointer event suppression, keyboard accessibility (`ArrowUp`/`ArrowDown`), and double-click reset to 240px.
+  - Integrated `videoHeight` persistence (`sceneflow_video_height`) with debounced write-on-release (`commitVideoHeight`), and unified it with the header's "Reset View" button to reset both panel split and video height in one click.
+- **Header "Reset View" Button (`src/components/AppHeader.tsx`, `src/hooks/useScriptPreferences.ts`)**:
+  - Added a dedicated reset button (`RotateCcw`) to the desktop header toolbar with active indicator dot and dynamic tooltips, restoring default 42:58 split and 100% video size in a single click.
+- **Absolute Pixel Minimum Constraint for Panel Split (`src/components/common/SplitPaneDivider.tsx`, `src/hooks/useScriptPreferences.ts`)**:
+  - Added `MIN_PANEL_PIXEL_WIDTH = 380` to prevent the left playback column from collapsing into an unusable micro-sliver on smaller desktop viewports (1024px–1366px laptops).
+  - Both pointer drag tracking and keyboard adjustment (<kbd>ArrowLeft</kbd>) calculate `effectiveMinRatio = Math.max(minRatio, (380 / windowWidth) * 100)`.
+- **Timing Buffers Activation Synchronization (The Dual-Time Principle) (`useTimelineWindow.ts`, `HighlightTimelineView.tsx`, `ActiveHighlightsPanel.tsx`)**:
+  - Integrated `state.settings` into the timeline so that cue blocks and category indicator dots illuminate (`isPlayheadInside`) across the full `before` lead-in and `after` hold buffers via `isCueActive()`.
+  - Docked paused cue inspector displays active cues in lockstep with the highlighted screenplay text while preserving physical audio media boundaries (`startTime` $\to$ `endTime`) on the timecode ruler.
+### Changed
+- **Default View Layout Calibration (`src/hooks/useScriptPreferences.ts`, `src/components/AppHeader.tsx`)**:
+  - Calibrated default split ratio from `42%` to **`65%`** (65% Left / 35% Right) and raised `MAX_SPLIT_RATIO` from `65%` to `72%`, prioritizing horizontal timeline width for multi-track cues and timecode ruler visibility while framing the screenplay in its natural ~35% single-column format.
+  - Adjusted default video player height from `240px` to **`220px`**, establishing a sleek, compact preview monitor that expands vertical headroom for all 5 timeline lanes.
+  - Dynamically wired the header `AppHeader` "Reset View" button tooltip to `DEFAULT_SPLIT_RATIO` (`Default 65:35`).
+
+### Fixed
+- **Dark Mode Current Time Counter Contrast (`src/styles/tokens/ui.ts`, `src/components/AppHeader.tsx`, `src/components/ScriptHeaderControls.tsx`)**:
+  - Fixed an issue where the current time counter digits in dark mode rendered in near-black charcoal (`#1c1917`) on top of a dark pill (`bg-surface-dark`, `#0f0e0d` / `#000000`), resulting in an unreadable ~1.1:1 contrast ratio.
+  - Decoupled `UI_TOKENS.badge.currentTimePill` and the digit spans from the inverted `btn-primary-text` button token, applying high-contrast `text-white` across all themes.
+  - Added centralized `UI_TOKENS.badge.currentTimePillSm` token to ensure consistent desktop and mobile current time pill styling.
+- **Timeline Sub-Lane Density Synchronization (`src/components/active-highlights/timeline/`)**:
+  - Fixed a sub-lane clipping bug where compact density shortened track container heights while cue blocks remained at 26px vertical offsets.
+  - Forwarded `density` from `TimelineLane` into `TimelineCueBlock`, ensuring top offsets (`subLaneIndex * step + padding`) and block heights (18px vs 22px) stay strictly in lockstep with container bounds.
+- **Playback State-Aware Seeking & Auto-Play Suppression (`src/hooks/useYouTubePlayer.ts`, `src/App.tsx`, `src/hooks/useCueEditor.ts`)**:
+  - Fixed an issue where clicking a cue on the timeline or in the script while paused triggered YouTube's unbuffered seek autoplay quirk (`BUFFERING (3) -> PLAYING (1)`).
+  - Implemented pre-emptive and post-seek `player.pauseVideo()` enforcement alongside `player.seekTo()`.
+  - Added an auto-expiring 600ms seek guard timeout to prevent the "ghost pause" bug, ensuring that subsequent clicks on the YouTube player frame start playback immediately on the first click.
+  - Propagated explicit `autoPlay: true` intent through props so the inspector's "Replay" action immediately seeks and begins playback.
+  - Protected edit-mode cue selection in `useCueEditor.ts` against involuntary playback when paused.
+
+### Refactored
+- **Adaptive Highlights Toolbar & Narrow-Column Responsiveness (`src/components/active-highlights/ActiveHighlightsPanel.tsx`, `src/components/active-highlights/timeline/TimelineLane.tsx`)**:
+  - Implemented an adaptive layout via `ResizeObserver` that dynamically switches between a sleek single unified row and a Two-Tier Header based on panel width (threshold: 560px).
+  - **Wide Viewports ($\ge 560\text{px}$)**: Keeps all controls on a single unified row (`Highlights` + `Active: X` VU meter on left; `[Flex | Fixed]` + `[4s | 8s | 16s]` + `[Filters]` + `[Timeline | Cards]` on right), eliminating vertical clutter and reserving maximum height for the timeline tracks.
+  - **Narrow Viewports ($< 560\text{px}$)**: Automatically transforms into a clean Two-Tier Header (Tier 1: Section title, VU meter, and view switcher; Tier 2: Zoom presets, Track Height mode, and Filters toggle), completely preventing button collisions and text squishing when dragging the vertical split pane to the left.
+  - **Compact Category Track Headers (`TimelineLane.tsx`)**: Scaled track header buttons from `w-22` (88px) down to `w-18` (72px) with `text-[8.5px]` font and compact padding (`px-1.5`, `gap-1`), immediately freeing 16px of horizontal space per lane for timeline cue blocks and ruler ticks.
+  - **Section Title Streamlining**: Renamed the section title from "Active Highlights" to "Highlights" to eliminate redundancy with the adjacent `Active: X` VU badge and save horizontal width.
+- **Zero-Scroll Playback Left Panel Optimization (`src/components/playback/PlaybackLeftPanel.tsx`, `src/components/active-highlights/`)**:
+  - Optimized playback column padding from `lg:p-10` to `lg:px-6 lg:py-3.5` (reclaiming ~52px of blank vertical whitespace) and tightened inter-section gaps.
+  - Scaled the 16:9 player and timeline components so that the video, filter pills, multi-track lanes, and timecode ruler fit on screen simultaneously with 0px vertical scrolling.
+  - Preserved standard `comfortable` track density (32px track height) as the unclipped default.
+- **Playback & Edit Left Panel Decoupling (`src/components/playback/PlaybackLeftPanel.tsx`, `src/App.tsx`)**:
+  - Extracted dedicated `PlaybackLeftPanel` component to isolate video player rendering, sizing controls, and active highlights from Edit mode.
+  - Eliminated mixed-mode conditional ternaries and sticky scroll listeners in `App.tsx`, providing a clean, isolated container architecture for playback viewport optimizations.
+- **Timeline Density & Interactive Category Visibility (`src/components/active-highlights/`)**:
+  - Introduced `TimelineDensity` (`'comfortable' | 'compact'`) support across `types.ts`, `ActiveHighlightsPanel.tsx`, `HighlightTimelineView.tsx`, and `TimelineLane.tsx` for dynamic track heights (32px vs 24px).
+  - Enhanced `TimelineLane` category headers into interactive buttons that toggle cue category visibility directly with active/muted visual states.
+  - Updated `useTimelineWindow.ts` to expose `scriptCategories` alongside `existingCategories` for robust category presence tracking.
+
+## [2.2.0] - 2026-08-29
+
+### Added
+- **Dynamic Multi-Theme System (Light / Warm / Dark App Theming) (`src/index.css`, `src/hooks/useAppShellTheme.ts`, `src/components/*`)**:
+  - Defined bespoke, semantic CSS variable color schemes in `src/index.css` under Tailwind CSS v4 `@theme` covering `--surface`, `--surface-subtle`, `--surface-muted`, `--surface-hover`, `--surface-dark`, `--border-main`, `--border-subtle`, `--text-main`, `--text-body`, `--text-muted`, `--text-faint`, `--btn-primary-*`, `--btn-secondary-*`, and overlay layers.
+  - Implemented three curated palettes:
+    - **Light Mode (`:root` / `[data-theme-category="light"]`)**: Clean studio paper with neutral stone surfaces (`#ffffff`, `#f5f5f4`, `#1c1917`).
+    - **Warm Mode (`[data-theme-category="warm"]`)**: Soft antique sepia & warm umber parchment (`#faf7f0`, `#f3efe6`, `#2b231d`).
+    - **Dark Mode (`[data-theme-category="dark"]`)**: Midnight slate with high-contrast light text (`#171514`, `#0c0a09`, `#f5f5f4`).
+  - **Automatic Screenplay Theme Synchronization**: Selecting any screenplay paper preset automatically transitions the entire application shell (Header, Left Panels, Modals, Desk Surface) to the matching theme category (*Studio Crisp* $\rightarrow$ Light, *Warm Parchment* / *Newsprint* $\rightarrow$ Warm, *Midnight Slate* / *OLED Blackout* / *Navy Slate* $\rightarrow$ Dark).
+  - **Custom Hook & Persistence (`src/hooks/useAppShellTheme.ts`)**: Manages `auto`, `light`, `warm`, and `dark` modes with `localStorage` persistence and smooth 250ms CSS color transitions.
+  - **Quick Theme Mode Switcher (`src/components/AppHeader.tsx`)**: Header button displaying `Sparkles [A]` for Auto, `Sun` for Light, `Coffee` for Warm, and `Moon` for Dark with instant cycling and descriptive tooltips.
+  - **Strict Script Paper Isolation Boundary**: Screenplay paper textures and adaptive cue highlight calculations remain completely preserved and isolated in `themes.ts`, `cues.ts`, and `helpers.ts`.
+- **Adaptive Dynamic Theme Logo (`src/index.css`, `src/components/*`)**:
+  - Implemented zero-JS-lag CSS selectors (`.logo-light`, `.logo-dark`) to automatically display `/SCENEFLOW_TAG_B.png` in Light/Warm modes and `/SCENEFLOW_TAG_WHITE.png` in Dark mode across `AppHeader`, `AppInfoModal`, and `InitializingScreen`.
+- **Streamlined Mobile Theme Drawer (`src/components/MobileColorModal.tsx`, `src/components/ScriptHeaderControls.tsx`)**:
+  - Built a dedicated bottom-sheet drawer using `motion/react` spring physics with a gesture handle, backdrop blur, and full-width "Done" button.
+  - Features a 4-segment App Shell mode selector (`[ ✨ Auto | ☀️ Light | ☕ Warm | 🌙 Dark ]`) with dynamic status badges.
+  - Features 6 compact screenplay preset cards styled in their true paper background (`theme.paperBg`) and text contrast (`theme.textColor`), omitting bulky script mockups for a clean, thumb-friendly mobile experience.
+  - Added a `<Palette size={10} /> Theme` button directly in the mobile playback control bar alongside Library.
+- **Universal Modal `Escape` Key & Backdrop Dismissal (`src/hooks/useEscapeKey.ts`, `src/components/*`)**:
+  - Standardized keyboard and click dismissal across all modals via a lightweight, reusable `useEscapeKey(onClose, isOpen)` hook.
+  - Added `Escape` key listeners and backdrop click-to-dismiss handlers to `ScriptColorModal` (Visual Themes), `MobileColorModal`, `TimingSettingsModal` (Timing Buffers), `MobileLibraryModal`, `RawScriptModal` (Raw Screenplay), `RawCuesModal` (Raw Cues JSON), `DeleteConfirmationModal`, `ResetConfirmationModal`, and `OverlapPicker`.
+  - Refactored `AppInfoModal`, `LibraryModal`, and `StagingModal` to use the consolidated `useEscapeKey` hook for clean event cleanup and consistent lifecycle handling.
+- **Desktop App Info & About Modal (`src/components/AppInfoModal.tsx`, `src/components/AppHeader.tsx`, `src/App.tsx`)**:
+  - Introduced a desktop-only About & Application Info dialog opened via a dedicated `i` (Info) icon button in the header toolbar.
+  - **Dynamic Metadata & Versioning**: Automatically reads application name, current version (`v2.2.0`), and description directly from `metadata.json`.
+  - **Author Attribution**: Integrated author credit for **Taruma Sakti** in the modal header and footer with direct links to [Linktree](https://linktr.ee/tarumainfo).
+  - **Resource Links**: Clean 2x2 interactive badge grid linking to the GitHub Repository, Documentation & Guide, Release Notes (Changelog), and Ko-fi Support.
+  - **Key Capabilities & Shortcuts Cheat Sheet**: In-app overview of core capabilities and supported keyboard shortcuts (`Space / K`, `← / →`, `J / L`, `Esc`).
+  - **Ergonomics & Modal Safety**: Supports dismissal via `Escape` key, backdrop click, or close button; automatically disables global video keyboard shortcuts while any modal is active.
+- **Enhanced Global Keyboard Shortcuts (`src/hooks/useKeyboardShortcuts.ts`, `src/App.tsx`)**:
+  - Added YouTube-standard navigation hotkeys (`KeyK` for Play/Pause, `KeyJ` for -5s seek, `KeyL` for +5s seek) alongside existing `Space` and arrow key (`ArrowLeft` / `ArrowRight`) bindings.
+  - Hardened modal detection safeguards in `App.tsx` via `isAnyModalOpen` to disable background video shortcuts whenever any dialog or confirmation is active.
+
+### Fixed
+- **Visual Design System Refactoring & Contrast Hardening across all 18 Components**:
+  - Replaced hardcoded stone utility classes across the entire component suite with centralized semantic tokens in `UI_TOKENS` and `@theme`.
+  - Fixed dark preset badge contrast in `ScriptColorModal` (`bg-stone-800 text-stone-200`).
+  - Fixed modal header icon wrapper badges (`UI_TOKENS.iconWrapper.dark`) to invert with high contrast in Dark mode (`bg-btn-primary-bg text-btn-primary-text`).
+  - Harmonized `MobileLibraryModal` to dynamically follow active Light, Warm, and Dark themes.
+  - Fixed vertical alignment and font baseline shifts for category count badges across `MobileLibraryModal` and `LibraryModal`.
+  - Fixed featured card titles, descriptions, and badges in `LibraryModal` for dark mode, replacing low-contrast brown utilities with high-contrast semantic typography and glowing amber accents.
+
+
+## [2.1.1] - 2026-08-28
+
+### Fixed
+- **Line-Anchored DOM Offset Calculation for Text Selection in Edit View (`src/lib/cueUtils.ts`, `src/hooks/useCueEditor.ts`, `src/App.tsx`)**:
+  - Fixed an issue where highlighting text containing repeated keywords (e.g. `CAM 05`, character names, parentheticals, or repeated phrases) in Edit View incorrectly jumped to the first occurrence at the beginning of the screenplay instead of targeting the specific line highlighted by the mouse cursor.
+  - Added line metadata attributes (`data-line-start`, `data-line-end`, `data-line-idx`) to all rendered screenplay line containers in `App.tsx`.
+  - Introduced `getSelectionIndicesFromDOM()` in `cueUtils.ts` to accurately compute exact character offsets from the browser's DOM `Range` and line container, with local snippet matching and seamless fallback to `findTextInScript()`.
+  - Updated `handleSelection()` in `useCueEditor.ts` to utilize DOM-anchored character offsets, ensuring precise sync cue placement on repeated phrases across the entire document.
+
+## [2.1.0] - 2026-08-28
+
+### Added
+- **Redesigned Onboarding Starter Guide (`public/examples/blank.json`)**:
+  - Restructured the default onboarding project to establish **Script-to-Screen** synchronization across both traditional and AI filmmaking workflows.
+  - Cleanly separated the documentation between **Screenplay Format** (headings, character dialogue, parentheticals, actions, SFX/VFX) and **Auteur Script Format** (technical `<BRIEF>` cards, `->` waterfall chaining, and bold anchor tags).
+  - Modernized the Staging metadata scaffold to feature the modular architecture (Part 1 fresh scene scaffold vs. Part 2 `[[CONTINUITY PROTOCOL]]` extensions) with strict separation between `[[STAGING]]` setup and `[<BRIEF>]` execution.
+  - Formatted all tutorial section headers and notes using native dialogue and parenthetical layout heuristics for optimal in-app visual rendering.
+  - Integrated the complete two-part **Auteur Script** masterclass (*Frequency Over Force*) featuring comprehensive staging guardrails, macro/sub-state transitions, and synchronized timeline cues.
+  - Added a directorial note documenting the style evolution since March 2026 toward state-driven prompt engineering for video generation models while maintaining full raw-text screenplay support.
+- **Additional Example Projects**: Added new short-form AI clip examples to the built-in catalogue.
+- **Visual System Token Harmonization (`src/styles/tokens/ui.ts` & `src/index.css`)**:
+  - Expanded and centralized `UI_TOKENS` into standard design token groups covering:
+    - **`layout`**: App header, script headers (playback & edit modes), panel frames (`leftPanelBase`, `rightPanelBase`), and section titles (`sectionTitle`, `sectionTitleMini`).
+    - **`modal`**: Overlays (`overlay`, `overlayHeavy`, `overlayHighZ`), responsive modal containers (`containerSm`, `containerMd`, `containerLg`, `containerXl`, `containerLibrary`, `containerStaging`), standard headers (`header`, `headerSubtle`), footers, and padding tokens (`dialogPad`, `bodyPad`).
+    - **`dropdown`**: Focus mode and width/scroll preset dropdown menus (`menu`, `menuWide`), dropdown headers, header titles, items, and active item highlights.
+    - **`button`**: Primary, primary blue, secondary, secondary wide, danger, header icon action buttons (`headerIconButton`, `headerIconButtonActive`), mode switchers (`modeSwitchContainer`, `modeSwitchActive`, `modeSwitchInactive`), sort toggles (`sortButtonActive`, `sortButtonInactive`), action pills (`actionPill`, `actionPillActive`), support pills (`supportPill`), and close buttons (`iconClose`, `iconCloseSquare`, `iconCloseSm`).
+    - **`input`**: Search inputs, multiline textareas, code textareas, number boxes, and label tokens.
+    - **`panel`**: Data banners, cards (`card`, `cardInteractive`, `cardInteractiveActive`), empty placeholders (`emptyPlaceholder`), and legend containers (`legendContainer`).
+    - **`badge`**: Counter tags (`counter`, `counterFaint`), timestamp pills (`timeTag`), and header current time badges (`currentTimePill`).
+- **Comprehensive CSS Palette Variables (`src/index.css`)**:
+  - Defined semantic CSS custom properties (`--app-bg`, `--surface`, `--surface-subtle`, `--surface-muted`, `--surface-hover`, `--surface-dark`, `--border-main`, `--border-subtle`, `--border-subtle-trans`, `--text-main`, `--text-body`, `--text-muted`, `--text-faint`, `--text-placeholder`, `--overlay-bg`, `--overlay-heavy`, `--color-support`, `--color-support-hover`) mapped directly into Tailwind CSS v4's `@theme` directive.
+
+### Changed
+- **Component Design Token Alignment**:
+  - Refactored application shell and modal components to consistently consume centralized `UI_TOKENS` rather than ad-hoc inline classes:
+    - `App.tsx` — aligned left/right panel layout base containers (`leftPanelBase`, `rightPanelBase`).
+    - `AppHeader.tsx` — aligned mode switcher container/buttons, header action icon buttons, support pill, and Current Time badge.
+    - `ScriptHeaderControls.tsx` — aligned playback header bar, Auto-Scroll focus, Script Width, and Scroll Focus dropdown menus, mobile Ko-fi pill, and section title.
+    - `LibraryModal.tsx` — aligned modal frame container, header, search bar, close button, and sort selector buttons.
+    - `StagingModal.tsx` — aligned modal container, header, close button, and footer controls.
+    - `CueEditorForm.tsx` — aligned empty selection placeholder and section titles.
+    - `ActiveHighlightsPanel.tsx` — aligned section titles, counter badge, card container, and empty highlight state.
+    - `TimelineCuesPanel.tsx` — aligned section titles, cue count badge, cue category legend container, interactive cue cards, time tags, and empty state placeholder.
+    - `TimingSettingsModal.tsx` — aligned heavy backdrop overlay and dialog container.
+- **Comprehensive Documentation Refresh & Specification Synchronization**:
+  - `README.md` — updated script element formatting heuristics table, documented the modular scaffold (Part 1 standard vs. Part 2 extension examples), clarified the distinction between `[[STAGING]]` directives and `[<BRIEF>]` execution, and refreshed workflow links.
+  - `docs/FUNCTIONALITY.md` — detailed dual script parsing heuristics (Screenplay & Auteur Script), updated modular staging scaffold specifications, and linked catalogue reference to `SCENEFLOW_CATALOGUE.md`.
+  - `docs/ARCHITECTURE.md` — documented Auteur Brief and state transition parsing within the Processing Layer (`scriptProcessor.ts`).
+  - `SCENEFLOW_CATALOGUE.md` — updated catalogue index to reflect latest AI clip examples and models.
+- **Zero Visual Regression**: Preserved exact color, spacing, radius, shadow, and typography fidelity across desktop and mobile viewports.
+- **Strict Theme Scope Isolation**: Maintained complete separation between the Screenplay Paper Canvas engine (`themes.ts`, `cues.ts`, `typography.ts`, `helpers.ts`) and the outer App Shell Chrome (`ui.ts`, `index.css`), preparing the application for seamless dark/light mode toggling.
+
+## [2.0.0] - 2026-08-26
+
+### Added
+- **Script Theme System**: Introduced a customizable theme engine for the script viewer, allowing users to toggle between six distinct visual presets via the new `ScriptColorModal` component:
+  - Three light/warm themes: *Studio Crisp* (default), *Warm Parchment* (sepia-toned), *Retro Newspaper* (high-contrast print).
+  - Three dark themes: *Midnight Slate* (refined dark), *OLED Black* (pure black for power-saving displays), *Cyber Matrix* (neon-accented terminal aesthetic).
+  - Each theme provides a complete styling package covering paper surface, borders, shadows, headers, separators, staging badges, punch holes, brief cards, and cue highlight spectrums — all dynamically applied through `getScriptThemeStyles()` and `getCueColorForTheme()` in `src/styles/`.
+  - The theme modal includes a live preview inspector comparing theme properties side-by-side and a full eight-category cue highlight spectrum rendered per theme.
+  - Theme preference persists to `localStorage` and can be reset to default with a single click.
+- **Modular Screenplay & UI Design Token Architecture (`src/styles/`)**: Centralized design tokens, theme definitions, and styling helpers into a modular package:
+  - `src/styles/tokens/ui.ts` — centralized `UI_TOKENS` providing reusable Tailwind class bundles for modal overlays, dialog containers, buttons (primary, secondary, danger, header controls, action pills), form controls (inputs, textareas, code boxes, search, labels), icon badge wrappers, panel banners, theme swatches, and alert cards.
+  - `src/styles/tokens/cues.ts` — defines theme-calibrated cue highlight palettes (`CUE_THEME_COLORS`), fallback color definitions, and `getCueColorForTheme()`.
+  - `src/styles/tokens/themes.ts` — defines 6 visual themes (`SCRIPT_THEMES`), `SCRIPT_THEME_MAP`, default theme configuration, and category groupings (`light`, `warm`, `dark`).
+  - `src/styles/tokens/typography.ts` — provides `getScriptThemeStyles(themeId)` generating theme-specific typography, headings, title lines, staging badges, and cue wrapper styles.
+  - `src/styles/helpers.ts` — color manipulation and inline styling utilities (`hexToRgba`, `createCueBadgeStyle`, `createInlineCueStyle`).
+  - `src/styles/index.ts` — unified barrel export providing clean access to all tokens, theme maps, and helpers.
+- **Theme Resolution Hook & Custom Hook Barrel (`useScriptTheme`)**:
+  - `src/hooks/useScriptTheme.ts` — added a dedicated custom hook that encapsulates active theme metadata, memoized computed theme styles, dynamic cue color resolution (`resolveCueColor`), active theme ID, and `isDark` boolean state.
+  - `src/hooks/index.ts` — introduced a canonical barrel export consolidating all 8 custom hooks.
+- **Configurable Screenplay Width Presets**: Added five adjustable reading-column widths for the script preview panel in playback mode, selectable via a desktop-only dropdown:
+  - *Narrow* (384px), *Compact* (448px), *Standard* (576px, default), *Wide* (768px), and *Expanded* (1024px).
+  - Preference persists to `localStorage` and each preset includes a descriptive label visible in the dropdown.
+- **Scroll Focus Alignment Presets**: Added three configurable auto-scroll anchor positions during playback, controlling where the active cue line rests vertically within the viewport:
+  - *Top (35%)* — positions the active line near the top for anticipation reading.
+  - *Center (50%)* — balanced midpoint alignment.
+  - *Bottom (35%)* — positions the active line lower for reflection reading.
+  - Switching presets immediately re-scrolls to the current active cue for instant feedback; preference persists to `localStorage`.
+- **Custom React Hook Architecture**: Extracted application business logic, playback controls, and editor state from `App.tsx` into a modular suite of eight custom hooks in `src/hooks/`:
+  - `useScriptStorage` — encapsulates state initialization, initial default script loading (`scene_frequency.json`), `localStorage` persistence (`screenplay_sync_state`), starter blank script loading (`blank.json`), and CORS-aware remote project loading (`?project=URL`) with error handling.
+  - `useYouTubePlayer` — encapsulates YouTube IFrame Player instance binding, playback state synchronization, a 100ms interval timer for high-frequency time tracking (`currentTime`), and video transport actions (`playVideo`, `pauseVideo`, `togglePlayPause`, `seekTo`, `jumpBy`).
+  - `useScriptPreferences` — manages reading-column width presets, auto-scroll focus anchor presets, script theme selection, and cue category visibility filtering with automatic `localStorage` synchronization (`sceneflow_script_theme`, `sceneflow_script_width_preset`, `sceneflow_scroll_focus_preset`).
+  - `useAutoScroll` — manages real-time screenplay auto-scrolling during playback, active cue selection (prioritizing newest start time and script position), multi-target type filtering, and smooth ratio-based viewport alignment (desktop configurable anchor vs mobile center alignment).
+  - `useCueEditor` — encapsulates cue authoring, range selection, in-place text editing, duplicate occurrence lookup, cue deletion with confirmation dialogs, and video timeline seeking.
+  - `useCueAlignment` — manages automated and manual cue realignment against edited screenplay text with visual status indicators (`isAligning`, `alignSuccess`).
+  - `useKeyboardShortcuts` — handles global playback hotkeys (Space for play/pause, ArrowLeft/Right for 5s jumps) with input element gating, modal bypass, and responsive desktop layout detection.
+  - `useScriptTheme` — provides dynamic theme resolution, computed theme class bundles, `resolveCueColor` mapping, and dark mode detection.
+- **Dedicated Cue Utilities Module (`src/lib/cueUtils.ts`)**: Extracted core cue processing, alignment, search, validation, and ID sanitization logic into pure functions:
+  - `sanitizeCues` — ID deduplication and normalization engine that guarantees unique React keys, infers missing `type`/`colorClass` fields bidirectionally on load, and injects UUID-fallback IDs for malformed cues.
+  - `findTextInScript` — three-tier text search (exact match, normalized whitespace/quotes regex, case-insensitive fallback) used by the cue editor to map user selections to character offsets.
+  - `findAlternativeLocations` — proximity-aware regex search returning all matching text occurrences with surrounding 25-character context snippets while skipping hidden `[[STAGING]]` blocks.
+  - `realignCuesList` — chronological cue alignment engine that recalculates character offset boundaries (`startIndex`, `endIndex`) against updated script text using proximity matching and fallback heuristics while excluding staging blocks.
+  - `getCueTimingOffsets` — aggregates per-type and global lead-in/tail-out timing offsets.
+  - `isCueActive` — high-frequency check determining if a cue falls within the active playback time window.
+  - `calculateCuePlaybackOpacity` — calculates dynamic fade-in and fade-out opacity values during playback offsets.
+  - `exportStateToJsonFile` — triggers client-side formatted JSON state downloads.
+  - `validateImportedScriptJson` — validates, normalizes, and injects default fallbacks for imported project files.
+- **Centralized Script Constants (`src/constants/script.ts`)**: Created a dedicated module consolidating immutable application constants:
+  - `COLORS` — eight standardized cue element categories with types, RGB color strings, and fallback classes.
+  - `DEFAULT_SETTINGS` — baseline timing configurations for general and cue-specific offsets (`before: 0, after: 0`).
+  - `SCRIPT_WIDTH_PRESETS` — configuration for the five reading width presets (`narrow`, `compact`, `standard`, `wide`, `full`).
+  - `SCROLL_FOCUS_PRESETS` — configuration for the three auto-scroll anchor presets (`top`, `center`, `bottom`).
+- **Comprehensive Domain Types (`src/types/script.ts`)**: Consolidated domain interfaces and state definitions:
+  - Added `Cue`, `TimingSettings`, `ColorCategory`, `AppState`, `ScriptWidthPresetId`, `ScriptWidthPreset`, `ScrollFocusPresetId`, `ScrollFocusPreset`, `TextSelection`, `DeleteConfirmationState`, `ResetConfirmationState`, `OverlapPickerState`, `AlternativeLocation`, and `AppMode`.
+- **Shared Utility Module (`src/lib/utils.ts`)**: Extracted reusable utility functions from `App.tsx` into a dedicated module:
+  - `cn()` — safe Tailwind CSS class merging using `clsx` + `tailwind-merge` for conditional and dynamic class composition.
+  - `extractYoutubeId()` — robust YouTube URL/id parser supporting `youtu.be`, `watch?v=`, `embed/`, `shorts/`, and plain ID formats.
+  - `generateId()` — UUID generator utilizing `crypto.randomUUID()` with fallback generation for consistent entity identifiers.
+- **Mobile-Responsive Library Modal**: Designed a purpose-built `MobileLibraryModal` component tailored for smaller screens, providing a native-feeling category browsing experience distinct from the desktop `LibraryModal`. The desktop and mobile modals are mutually exclusive based on viewport width.
+- **Ko-fi Support Link**: Added a Ko-fi donation link (`https://ko-fi.com/tarumainfo`) with a themed coffee icon to the mobile header, alongside a Library access button for consistent discoverability across devices.
+- **Vercel Analytics Integration**: Integrated `@vercel/analytics` to capture and report audience traffic insights in production, complementing the existing Vercel Speed Insights for Web Vitals tracking.
+- **Manual Cue Text Editing**: Designed and integrated a monospace textarea inside the Edit Sync Cue panel allowing users to directly edit a cue's selected text in-place. This provides a clean way to perform manual key-value corrections or alignment adjustments without raw JSON editing, integrating seamlessly with the Align and Find Alternative engines.
+- **Mobile Staging Overlay Visibility**: Enabled the staging block overlay and badge for mobile and tablet devices, offering access to behind-the-scenes camera staging instructions on all device widths.
+- **Global Library Filter Settings**: Added support for `hideFromAll` metadata in example sections within `examples.ts`. This allows specific sections (e.g., "AI Clips") to be kept out of the unified "All Works" view to reduce noise and emphasize high-priority curations like "AI Scenes" and "The Written Motion".
+- **Dynamic Category Badges**: Added contextual section indicators inside screenplay cards in the Library view. These badges dynamically reference which section a screenplay belongs to, complete with matching category-themed icons (e.g., Compass, Notebook, Film) for quick identification. Badges are automatically suppressed when browsing within their own specific category to prevent redundant labeling.
+- **Expanded Example Library**: Added seven new screenplay examples across multiple categories:
+  - *Scene Frequency* — a full-featured guide script showcasing timing cues and staging blocks, now the default example loaded on first visit.
+  - *Museum* — a live-action-to-2D-animation transformation scene set in a gallery environment.
+  - *Still Here* — an atmospheric narrative scene with layered environmental cues.
+  - *The Magic Card* — a ritualistic cinematic clip involving golden seals and floating mystical cards.
+  - *Wonder (Volume 6)* — the sixth installment of "The Written Motion" series, in both edited and uncut versions.
+  - *What We Leave (Volume 7)* — the seventh installment of "The Written Motion" series.
+  - *A Duet of Distance* — a music-driven piece exploring the tension between tradition and regret.
+  - Reorganized *Table Four* and *Flat Frog Problems* out of the AI Clips section and into the Auteur Scene & Brief section to better reflect their production complexity.
+  - Reclassified *Duet of Distance* from AI Clips to Auteur Scene & Brief and added a `music` tag.
+- **Branded Loading & Initialization Screen**: Replaced the generic spinner with a branded `InitializingScreen` component displaying the SceneFlow logo (`SCENEFLOW_TAG_B.png`) with a subtle pulse animation and monospace status text, providing a polished first-load experience.
+- **Application Icons & PWA Assets**: Added a complete set of favicon and PWA (Progressive Web App) assets for improved cross-browser compatibility and "Add to Home Screen" support:
+  - `favicon.ico` (multi-resolution ICO), `favicon-16x16.png`, `favicon-32x32.png`, `apple-touch-icon.png` (180×180), `android-chrome-192x192.png`, and `android-chrome-512x512.png`.
+  - `site.webmanifest` with standalone display mode, theme color, and icon definitions.
+  - Updated `index.html` to reference all icon formats and the web manifest.
+- **Custom Dark Scrollbar Styling**: Added a dedicated `.custom-dark-scrollbar` CSS utility for dark-themed modals, providing a styled scrollbar (thin, with `stone-900` track and `stone-700` thumb) that matches the dark modal aesthetic on desktop browsers.
+
+### Changed
+- **Architectural Modernization & App.tsx Refactoring**: Deconstructed the monolithic `App.tsx` into a lightweight orchestrator by delegating state, side effects, and domain logic to the custom hook suite (8 custom hooks) and 18 modular sub-components:
+  - App shell components: `AppHeader` (global navigation, logo, time display, mode toggle), `InitializingScreen` (branded loading splash), `YoutubeSourceInput` (video ID parser input).
+  - Edit-mode components: `ScriptManagementBar` (line count & raw script access), `CueEditorForm` (cue authoring/editing form with text, type, timing, and location fields), `TimelineCuesPanel` (chronological cue list with color legend, raw JSON access, Align button), `RawScriptModal`, `RawCuesModal`.
+  - Playback-mode components: `ScriptHeaderControls` (auto-scroll toggle, target-type multi-select, width preset, scroll focus preset), `ActiveHighlightsPanel` (desktop sidebar with per-type filter chips and active highlight cards).
+  - Shared modals: `OverlapPicker`, `DeleteConfirmationModal`, `ResetConfirmationModal`, `TimingSettingsModal`, `ScriptColorModal`, `LibraryModal`, `MobileLibraryModal`, and `StagingModal`.
+  - New utility modules: `src/lib/cueUtils.ts` (cue processing, alignment, active states, JSON import/export) and `src/lib/utils.ts` (`cn`, `extractYoutubeId`, `generateId`).
+  - Clear separation of concerns between presentation layer, state management layer, and persistence/transport layer.
+  - Refactored UI sub-components to consume centralized `UI_TOKENS` from `src/styles/tokens/ui.ts` and `useScriptTheme` for unified styling.
+  - Updated `TimingSettingsModal` to consume centralized types and constants directly from `types/script.ts` and `constants/script.ts`.
+- **UI Design Tokens Migration**: Refactored modals (`ScriptColorModal`, `TimingSettingsModal`, `ResetConfirmationModal`, `DeleteConfirmationModal`, `RawScriptModal`, `RawCuesModal`), panels (`ScriptManagementBar`, `ActiveHighlightsPanel`, `TimelineCuesPanel`), inputs (`YoutubeSourceInput`), and forms (`CueEditorForm`) to consume centralized tokens from `UI_TOKENS` for consistent surface, input, badge, button, and typography styling.
+- **Deduplicated Reset Confirmation State**: Consolidated and standardized the `ResetConfirmationState` interface inside `src/types/script.ts`, removing duplicate interface declarations across modal components.
+- **Staging Parser Robustness**: Improved `parseScriptWithStaging()` in `src/lib/scriptParser.ts` to match inner staging labels (`[[LABEL]]...[[/LABEL]]`) against trimmed lines (`trimmedLine`), preventing leading/trailing whitespace formatting issues from breaking staging block extraction.
+- **Backwards-Compatible Style Layer**: Refactored `src/lib/scriptStyles.ts` to re-export from the modular `src/styles/` design token modules (`tokens/cues`, `tokens/themes`, `tokens/typography`, `tokens/ui`, `helpers`), maintaining backwards compatibility across the application.
+- **Centralized Cue Sanitization Pipeline**: Retrofitted `useScriptStorage` so all five data-load paths (localStorage restore, default project load, blank script, example library selection, and remote project fetch) route through `sanitizeCues()` for deterministic ID deduplication and `type`/`colorClass` normalization. Raw-cues JSON import via `RawCuesModal` also now applies `sanitizeCues()` on paste, ensuring every ingress point sanitizes cue data consistently.
+- **Metadata & Deployment Configuration**: Updated `metadata.json` to version `2.0.0-dev` and registered `"MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"` to declare the application's server-side Gemini API capability for deployment environments.
+- **Cue Type & Color Normalization**: Refactored cue state management to standardize the relationship between cue `type` and `colorClass`:
+  - Made `colorClass` optional on the `Cue` interface; styles are now dynamically derived from the `type` field using `getCueColorForTheme()`, which resolves theme-appropriate RGB colors.
+  - Updated cue creation workflow to default `type` to `'dialogue'` and derive `colorClass` bidirectionally — if only `colorClass` is present, the type is inferred; if only `type` is present, the correct color class is assigned.
+  - Migrated all cue rendering (sidebar list, inline script segments, type-selector buttons) from static Tailwind color classes to dynamic inline `style` attributes using theme-resolved RGB values, ensuring consistency across the six script themes.
+- **Brief Block Rendering Enhancements**: Improved the visual presentation and parsing of Auteur Brief segments:
+  - Added intelligent waterfall formatting that converts `->` sequences into indented hierarchical lines, with special handling to prevent blank leading lines at segment boundaries.
+  - Suppressed rendering of empty whitespace lines within brief blocks via `scriptProcessor.ts`, eliminating ghost empty cards.
+  - Applied styled card containers to brief segments with theme-aware backgrounds, borders, and badge styling for clearer visual hierarchy.
+- **Anchor Badge Simplification**: Simplified inline anchor rendering (`[...]` brackets) from styled span badges to standard `<b>` bold text, reducing visual complexity while preserving emphasis. (Styled badges were temporarily implemented then replaced with the simpler bold approach for cleaner readability.)
+- **Adaptive Staging Badge Design**: Tailored the staging block layout specifically for mobile screens to conserve space without impacting structural layouts or desktop styling:
+  - Downscaled the badge font sizes, icon sizes, padding, and gaps on mobile viewports for a compact, neat appearance.
+  - Adjusted mobile container margins to gracefully flow beneath screenplay headings.
+  - Updated the staging container to use `flex-wrap` for responsive badge overflow handling.
+- **Example Data Reorganization**: Moved all JSON example files from the root `public/` directory into dedicated subdirectories:
+  - Standard examples into `public/examples/`.
+  - AI clip-specific examples into `public/examples/ai_clips/`.
+  - Updated all path references in `examples.ts` and application logic accordingly.
+- **Guide Script Replacement**: Renamed the "blank" starter script to "guide script" (`blank.json`) to better reflect its role as an instructional reference. The guide script now defaults to playback mode on load and automatically re-aligns cues.
+- **Default Example Update**: Changed the default example project from "The Expansion" to "Scene Frequency" (`scene_frequency`), providing a more comprehensive guide script on first visit.
+- **Video Player Styling**: Refined the visual appearance of the YouTube video container by updating background colors and adjusting iframe framing for a more polished, edge-to-edge presentation.
+- **Settings Icon Update**: Replaced the generic settings gear icon with a Clock icon (`Clock` from lucide-react) to better represent the timing-focused nature of the settings panel.
+- **Mobile Header Enhancements**: Replaced the mobile edit-mode toggle with a Library access button (`Book` icon) and a Ko-fi support link (`Coffee` icon), providing quicker navigation and community support access on small screens. The mode indicator badge ("Playback" / "Edit") is now hidden on mobile to conserve header space.
+- **Updated Example Metadata**: Revised tags, featured flags, and release dates across the example catalogue:
+  - Demoted several items from `featured: true` to `false` (The Expansion, Intent Over Rules, Reality-Bending Video, Afraid, Not About Fish, Duet of Distance, Still Restless) to refresh the featured curation.
+  - Added `music` tag to *Vibe Shift* and *A Duet of Distance*.
+  - Cleaned up inconsistent tag metadata across the library.
+- **Comprehensive Documentation Synchronization**: Refreshed and synchronized project documentation across `docs/` and `README.md` to reflect all architectural, stack, and domain model changes:
+  - `docs/AGENTS.md` — updated parsing and styling guidelines to reference `src/styles/` design tokens and `useScriptTheme`.
+  - `docs/ARCHITECTURE.md` — documented 5-layer system architecture (Presentation Layer with 18 modular sub-components, State & Hooks Layer with 8 custom hooks, Visuals Layer with `src/styles/` design tokens, Utility Layer, and Processing Layer), ASCII data flow diagrams, theme engine, width/scroll presets, and the dark scrollbar utility.
+  - `docs/FUNCTIONALITY.md` — expanded library catalogue section with FRAME Series entries, hideFromAll filtering, adaptive section badges, 6 script themes, reading width and focus presets, and in-place cue editing.
+  - `docs/TECH_STACK.md` — updated React version to 19, TypeScript to 5.8, Vite to 6, Tailwind CSS to v4 with `@theme` variables, centralized UI tokens, Motion animation library (`motion/react`), Lucide React, and `@vercel/analytics` / `@vercel/speed-insights`.
+  - `README.md` — replaced SVG logo reference with PNG, expanded the example loading table with all 20+ examples categorized by section, and updated the query parameter documentation.
+
+### Removed
+- **Obsolete AST Block Parser & Types**: Removed dead `parseScriptToBlocks()` function and `ScriptBlock` / `ScriptBlockType` types from `src/lib/scriptParser.ts` and `src/types/script.ts`, simplifying `parseScriptWithStaging()` to return `{ originalLines, stagingLineIndices, stagingMarkers }`.
+- **Legacy Static Theme Export**: Removed obsolete `SCRIPT_STYLES` static fallback export from typography tokens in favor of dynamic theme resolution.
+- **Dead Code & Props in Components**: Pruned unused destructured variables (e.g. `setAltLocations`), dead props (e.g. `cueTypes={COLORS}` on `ScriptHeaderControls`), debugging `console.log` state monitoring `useEffect` in `App.tsx`, and unused imports across modal components.
+
+### Fixed
+- **Mobile Script Width Selector**: Hid the page width preset dropdown on non-desktop screens to prevent UI crowding and improve layout flow for mobile staging badges.
+- **Brief Block Empty Line Filtering**: Empty or whitespace-only lines inside brief blocks are now filtered out during script processing, preventing ghost empty cards from rendering in the script view.
+- **Waterfall Formatting Edge Cases**: Improved the `formatBriefSegment` function to correctly handle `->` sequences at line starts without introducing unintended blank leading lines, and cleaned up double-newline artifacts from raw text that already contained line breaks before waterfall markers.
+
+## [1.4.0] - 2026-05-26
+
+### Added
+- **Library Catalogue Optimizations**: Designed a highly polished, fully responsive, and structured library portal built for discovering diverse examples:
+  - **Mobile & Tablet Display Optimization**: Optimized sizes, spacing, and scroll behaviors for mobile and tablet users. Introduced a smooth horizontal-scrolling category navigation bar, responsive dialogue sizing, auto-wrapping sorting selector controls, touch-friendly scroll wrappers, and hid physical keyboard shortcut hints on smaller viewports.
+  - **Dynamic "Featured" Curations**: Highlighted standout screenplays dynamically based on schema properties, emphasizing them with beautiful visual markers, unique hover effects, and special animated badges.
+  - **Chronological Sorting & Controls**: Enabled sorting of lists chronologically (by latest or oldest release dates) or alphabetically. Restricted or draft scripts are automatically pinned at the lowest priority.
+  - **Expanded Library Content**: Shipped with an increased collection of built-in scripts, multi-volume narrative series, and educational templates.
+  - **Real-time Global Search**: Smooth instantaneous scanning across screenplay titles, summaries, series volumes, and custom metadata badges.
+  - **Interactive Staging Overlay**: Integrated an isolated drawer for examining behind-the-scenes camera instructions, prompt hierarchies, and visual styles.
+
+### Changed
+- **Modular Component Separation**: Partitioned the codebase to isolate modal interfaces into `/src/components/LibraryModal.tsx` and `/src/components/StagingModal.tsx` components for improved system testability and cleaner core lifecycle handlers.
+
+## [1.3.1] - 2026-05-24
+
+### Changed
+- **Responsive Auto-Scroll Alignment**: Replaced standard `scrollIntoView` centering with a precise scroll calculation that positions active cues 35% from the container top on desktop displays (leaving preceding context visible while making upcoming lines easily readable). Tablet/phone displays continue to target native horizontal/vertical centering for maximum mobile screen economy.
+
+## [1.3.0] - 2026-05-15
+
+### Added
+- **Official SceneFlow GUIDE**: Released a comprehensive, interactive quick-start guide as the default "Blank" script project.
+- **Library Expansion (The Wanderer Multiverse)**: Added **Volume 4 (Wayfarers)** and **Volume 5 (Fractures)** to the example library, showcasing auteur brief prompting.
+- **Library "Getting Started" Section**: Added a dedicated section in the example library for high-priority tutorials.
+
+### Changed
+- **Rebranded Blank Script**: The initial workspace now serves as a narrative tutorial on "Cinematic Synchronization" and "Auteur Prompting," featuring a complete breakdown of formatting rules and cue management.
+- **Interactive Mosaic Example**: Integrated a deep-dive walkthrough of the "Mosaic" scene within the GUIDE to demonstrate complex staging and dual-character synchronization.
+
+## [1.2.5] - 2026-05-15
+
+### Changed
+- **Script Note Visibility**: Refined the bracketed tag logic to ensure that functional notes like `[INTENT]` or `[CUT TO: MEDIUM SHOT]` remain visible and properly formatted in the script preview, while preserving the hidden state of system-level tags like `[<BRIEF>]` and `[[STAGING]]`.
+
+## [1.2.4] - 2026-04-28
+
+### Changed
+- **Alignment Refinement**: Updated the alignment and "Find Alternative" engines to strictly ignore text matches within `[[STAGING]]` blocks. This ensures cues never accidentally snap to hidden prompt data that isn't visible in the screenplay preview.
+
+## [1.2.3] - 2026-04-25
+
+### Added
+- **Alternative Location Finder**: Resolved the "Duplicate Text" issue. When a cue points to text that appears multiple times in the script (e.g., "WIDE SHOT"), you can now click "Find Alternative" in the edit panel to see all occurrences and manually snap the cue to the correct location.
+- **Robust Matching Engine**: Updated the finder to use the same proximity-aware regex logic as the alignment tool. It now handles whitespace variations, different quote types, and provides a "partial match" fallback if the full string isn't found.
+- **Contextual Snippets**: The finder provides text snippets for each match to help identify the correct scene/block.
+
+## [1.2.2] - 2026-04-18
+
+### Added
+- **Inline Brief Blocks**: Introduced `[<BRIEF>]`/`[</BRIEF>]` tags for technical directives and scene briefs that remain visible in the script.
+- **Brief Formatting Engine**:
+  - **Waterfall Indentation**: Automatically injects newlines and indents after `->` characters inside Brief blocks for better readability of action flows.
+  - **Bold Anchors**: Automatically bolds text within square brackets `[...]` inside Brief blocks to create visual scanning anchors.
+  - **Monospace Typography**: Brief blocks use a technical monospace font to distinguish data from dialogue.
+
+## [1.2.1] - 2026-04-16
+
+### Enhanced
+- **Flexible Timing Offsets**: Timing settings now support negative values, allowing users to "nudge" specific categories to appear faster than the global master offset.
+- **Unified Defaults**: All timing settings (General and per-category) now default to `0.0s` for a cleaner out-of-the-box experience.
+
+## [1.2.0] - 2026-04-11
+
+### Added
+- **Multi-Select Focus Modes**: Users can now select multiple cue types for the script preview to follow (e.g., track both Dialogue and Action simultaneously).
+- **Most-Recent Priority**: Auto-scroll now prioritizes the most recently started cue among active ones, providing a more responsive and "live" tracking experience.
+- **Chronological & Proximity Alignment**: The "Align" feature now sorts cues by time and uses proximity-aware matching. This ensures that duplicate lines are mapped to their most logical position based on time and surrounding context, rather than just the first occurrence.
+
+## [1.1.0] - 2026-04-07
+
+### Added
+- **Remote Project Sharing via URL**: Added `?project=URL` query parameter to load JSON projects from CORS-enabled servers.
+- **Example Loading via URL**: Added `?example=ID` query parameter to load built-in examples (e.g., `expansion`, `intent`, `mosaic`, `invasion`).
+- **Staging Blocks & Auteur Prompting**: Implementation of `[[STAGING]]` blocks for embedding metadata (Global instructions, Lookbooks) that are hidden from the main view but accessible via a badge.
+- **Vercel Speed Insights Integration**: Added performance monitoring and Web Vitals tracking.
+- **Advanced Screenplay Parsing**:
+  - Support for `PART` and Roman numeral titles (e.g., `PART 1`, `I. THE BEGINNING`).
+  - Support for shot/camera notes in `[...]`.
+  - Detection and styling for bold direction for ALL CAPS single lines.
+- **Comprehensive Documentation**: Added a set of detailed documentation files in `docs/` covering agents, architecture, functionality, and tech stack.
+
+### Changed
+- **Refactored Script Processing**: Decentralized styling logic and modularized script parsing into `scriptProcessor.ts` and `scriptStyles.ts` for improved maintainability.
+- **Polished UI/UX**:
+  - Updated header padding and logo text visibility for better mobile responsiveness.
+  - Added confirmation dialogs for remote loading to prevent accidental data loss.
+  - Improved script alignment logic when text changes.
+- **Updated Examples**: Revised example script texts and timing for "The Breaking Point" and other built-in scenarios.
+
+### Fixed
+- **Playback Scrolling**: Prioritizes the most recent dialogue cue for scrolling during playback. Added bottom padding to the script container to ensure the last lines can be vertically centered during auto-scroll.
+- **Segment Identifiers**: Use correct scroll cue ID for segment spans spanning multiple lines in `App.tsx`.
+- **Script Clarifications**: Fixed screenplay terminology in examples (e.g., "ONE-ER" clarification).
+
+## [1.0.0] - 2026-04-02
+
+### Added
+- **Core Sync Engine**: Real-time script-to-video synchronization based on user-defined cues.
+- **8 Element Types**: Support for Dialogue, Action, Camera, Shot, Audio, VFX, Transition, and Environment cue types.
+- **Auto-Scroll**: Screenplay automatically follows dialogue during video playback.
+- **Cue Type Filtering**: Ability to toggle visibility of specific cue categories in the script view.
+- **Example Library**: Built-in demos including "Intent Over Rules" and "Mozaic" projects.
+- **Keyboard Shortcuts**: Spacebar for play/pause, Arrow keys for 5s seek.
+- **Project Export/Import**: JSON-based project saving and loading via local files.
+- **Responsive Design**: Mobile-friendly interface with video preview width controls on desktop.
+- **Automatic Persistence**: Continuous saving of work to browser's `localStorage`.
+
+### Changed
+- **Branding Update**: Rebranded from "Screenplay Sync" to "SceneFlow" with a custom SVG logo and updated metadata.
+
+### Fixed
+- **UI Spacing**: Adjusted video player margins and panel scroll behavior for a more consistent edit-mode experience.
+
+---
+*Initial Release*

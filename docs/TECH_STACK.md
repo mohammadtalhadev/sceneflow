@@ -1,0 +1,88 @@
+# Tech Stack
+
+SceneFlow is built with a modern, lightweight, and performant web stack designed for real-time video synchronization, deterministic text parsing, and fluid cross-device interaction.
+
+---
+
+## 1. Core Framework & Build Tooling
+
+- **React 19 (`react`, `react-dom: ^19.0.0`)**: Powers declarative UI rendering, concurrent features, and reactive component lifecycles.
+- **TypeScript 5.8 (`typescript: ~5.8.2`)**: Provides strict type safety across cue structures, processed screenplay lines, staging markers, theme tokens, and component props.
+- **Vite 6 (`vite: ^6.2.0`, `@vitejs/plugin-react: ^5.0.4`)**: Build tool and local development server with instant Hot Module Replacement (HMR) and optimized rollup production bundles.
+- **TSX (`tsx: ^4.21.0`)**: TypeScript execution runtime for auxiliary scripts.
+
+---
+
+## 2. Styling, UI, & Typography
+
+- **Tailwind CSS v4 (`tailwindcss: ^4.1.14`, `@tailwindcss/vite: ^4.1.14`)**: Utility-first CSS framework utilizing modern CSS `@theme` variables:
+  - **Typography**:
+    - `--font-sans`: `"Inter", ui-sans-serif, system-ui, sans-serif`
+    - `--font-serif`: `"Libre Baskerville", serif`
+    - `--font-mono`: `"JetBrains Mono", monospace`
+  - **Semantic Color Tokens**: Mapped from `:root` variables to `@theme` for cohesive app-wide styling (`--color-app`, `--color-surface`, `--color-surface-subtle`, `--color-surface-muted`, `--color-surface-hover`, `--color-surface-dark`, `--color-border-main`, `--color-border-subtle`, `--color-text-main`, `--color-text-body`, `--color-text-muted`, `--color-text-faint`, `--color-overlay-bg`, `--color-overlay-heavy`, `--color-support`, `--color-support-hover`).
+- **Modular Design Token Engine (`src/styles/`)**: Centralized design tokens and theme packages:
+  - `UI_TOKENS` (`src/styles/tokens/ui.ts`): Uniform Tailwind class definitions across layout frames, modal containers & overlays, dropdown menus, buttons & pills, form inputs, badge tags, panel cards, and swatches.
+  - Theme Tokens (`src/styles/tokens/themes.ts`, `cues.ts`, `typography.ts`, `helpers.ts`): Theme-calibrated color palettes and typography rules.
+- **clsx (`^2.1.1`) & tailwind-merge (`^3.5.0`)**: Utility functions merged via `cn()` in `src/lib/utils.ts` to safely combine dynamic and conditional Tailwind classes without collisions.
+- **Motion (`motion: ^12.23.24`)**: Modern animation engine (from the creators of Framer Motion) providing spring physics for dialog transitions, overlay backdrops, and mobile bottom-sheet drawers (`motion/react`).
+- **Lucide React (`lucide-react: ^0.546.0`)**: Icon library powering navigation, playback controls, category badges, and modal actions.
+- **Google Fonts**:
+  - *Inter*: Standard UI controls, navigation labels, and timing indicators.
+  - *Libre Baskerville*: Screenplay body, character names, and dialogue.
+  - *JetBrains Mono*: Technical notes, timecodes, JSON raw views, and Auteur Brief directives.
+- **Custom Scrollbar Utilities**:
+  - `.custom-dark-scrollbar`: Thin styled scrollbars for dark modal drawers.
+  - `.scrollbar-hide` / `.no-scrollbar`: Cross-browser utility to suppress scrollbars while preserving touch and trackpad scrollability.
+
+---
+
+## 3. Video Integration
+
+- **react-youtube (`^10.1.0`)**: React wrapper around the YouTube IFrame Player API enabling:
+  - Programmatic playback control (play, pause, seek).
+  - High-frequency time tracking (100ms polling loop).
+  - Event listener synchronization for player state changes (`onStateChange`, `onReady`).
+
+---
+
+## 4. State Management, Persistence, & Data Fetching
+
+- **React Hooks**: Local component state orchestrated via `useState`, `useEffect`, `useRef`, and memoized highlighting through `useMemo`. Eleven modular custom hooks (`useAppShellTheme`, `useScriptStorage`, `useYouTubePlayer`, `useScriptPreferences`, `useAutoScroll`, `useCueEditor`, `useCueAlignment`, `useKeyboardShortcuts`, `useScriptTheme`, `useEscapeKey`, `useClickOutside`) with a unified `src/hooks/index.ts` barrel encapsulate state lifecycle, playback control, theme resolution, and side effects, keeping `App.tsx` as a lightweight orchestrator.
+- **LocalStorage**: Client-side persistence for:
+  - `'screenplay_sync_state'`: Video source, screenplay raw text, cues array, and timing offsets.
+  - `'sceneflow_app_mode'`: Active workflow mode (`AppMode`: `'playback' | 'edit'`).
+  - `'sceneflow_app_theme_mode'`: Active application shell theme mode (`AppThemeMode`: `'auto' | 'light' | 'warm' | 'dark'`).
+  - `'sceneflow_script_theme'`: Active script viewer theme ID (`ScriptThemeId`).
+  - `'sceneflow_cue_palette_profile'`: Active cue palette accessibility profile (`CuePaletteProfile`: `'standard' | 'protanopia'`).
+  - `'sceneflow_script_width_preset'`: Desktop reading width preset (`ScriptWidthPresetId`).
+  - `'sceneflow_scroll_focus_preset'`: Desktop auto-scroll viewport anchor (`ScrollFocusPresetId`).
+  - `'sceneflow_highlight_view_mode'`: Active highlights presentation mode (`HighlightViewMode`: `'timeline' | 'cards'`).
+  - `'sceneflow_highlight_filter_expanded'`: Collapsed/expanded state of playback category filters (`boolean`).
+  - `'sceneflow_timeline_zoom_preset'`: Active timeline visible window zoom preset (`TimelineZoomPreset`: `'4s' | '8s' | '16s'`).
+  - `'sceneflow_timeline_height_mode'`: Active timeline track height mode (`TimelineHeightMode`: `'flexible' | 'fixed'`).
+  - `'sceneflow_split_ratio'`: Active desktop split pane ratio (`number`).
+  - `'sceneflow_edit_split_ratio'`: Active desktop edit mode left split ratio (`number`).
+  - `'sceneflow_inspector_ratio'`: Active desktop cue inspector width ratio (`number`).
+  - `'sceneflow_inspector_width'`: Active desktop cue inspector pixel width fallback (`number`).
+  - `'sceneflow_video_height'`: Active playback video player height in pixels (`number`).
+  - `'sceneflow_playback_video_collapsed'`: Video player collapsed/hidden state in Playback mode (`boolean`).
+  - `'sceneflow_pure_black_bg'`: Pure Black Canvas / Video Overlay mode toggle state (`boolean`).
+  - `'sceneflow_edit_autoscroll'`: Active auto-scroll state in Edit Mode Left Panel (`boolean`).
+- **Fetch API**: Asynchronously retrieves built-in JSON examples and remote projects.
+- **URLSearchParams**: Parses query parameters (`?example=ID`, `?project=URL`) on initial boot, with automatic URL cleanup using `window.history.replaceState`.
+
+---
+
+## 5. Analytics & Performance Monitoring
+
+- **Vercel Speed Insights (`@vercel/speed-insights: ^2.0.0`)**: Real-time Web Vitals and performance monitoring in production environments.
+- **Vercel Analytics (`@vercel/analytics: ^2.0.1`)**: Privacy-friendly audience and traffic insights for production deployments.
+
+---
+
+## 6. Progressive Web App & Static Assets
+
+- **PWA Web Manifest (`public/site.webmanifest`)**: Standalone display configuration with theme colors and application metadata.
+- **Icon Suite**: Multi-resolution icons including `favicon.ico`, `favicon-16x16.png`, `favicon-32x32.png`, `apple-touch-icon.png` (180×180), and Android Chrome icons (192×192, 512×512).
+

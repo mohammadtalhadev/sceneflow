@@ -1,0 +1,16 @@
+{
+  "youtubeId": "",
+  "scriptText": "",
+  "cues": [],
+  "settings": {
+    "general": { "before": 0, "after": 0 },
+    "dialogue": { "before": 0, "after": 0 },
+    "action": { "before": 0, "after": 0 },
+    "camera": { "before": 0, "after": 0 },
+    "shot": { "before": 0, "after": 0 },
+    "audio": { "before": 0, "after": 0 },
+    "vfx": { "before": 0, "after": 0 },
+    "transition": { "before": 0, "after": 0 },
+    "environment": { "before": 0, "after": 0 }
+  }
+}
