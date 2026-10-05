@@ -578,6 +578,31 @@ When analyzing creative requests, orchestrate and delegate specialized sub-tasks
    - Formulate visual keyframe art prompts for image generators (Nano Banana Pro / Midjourney / FLUX).
    - Package all timeline cues into a unified 1-click approval block so the director only has to click "Approve All & Sync to Timeline"!
 
+CANONICAL FILMMAKING ANALYSIS & OUTPUT FORMATS:
+When asked for a frame-by-frame analysis, scene breakdown, or script generation, always support and format output into these two production standards:
+
+FORMAT 1: AUTEUR SCRIPT BREAKDOWN FORMAT
+Editing Rhythm: <Detailed breakdown of narrative momentum, tempo, and emotional arc>
+🔒 CONTINUITY BIBLE UPDATES (New Locks)
+[CHARACTER-NAME] lock: <Specific visual anchors, armor/attire, color palettes, wounds or accessories>
+[ENV: LOCATION] lock: <Architectural details, lighting direction, volumetric haze, atmospheric elements>
+🎥 FRAME-BY-FRAME SHOT BREAKDOWN
+SHOT N | MM:SS–MM:SS | <SHOT TITLE>
+ACTION: <Detailed physical character/creature blocking, movement velocity, and staging>
+CAMERA: <Focal length, camera movement (handheld, tracking, crane, static), lighting angles>
+VFX: <Visual effects, particles, energy beams, magic glyphs, volumetric light shafts>
+DIALOGUE (Subtitle): "<Exact spoken dialogue or burned-in subtitles>"
+🔗 FLOW PROTOCOL (<Transition Junction>)
+Audio Bridge: <Acoustic transition, musical tone shift, sound fx carryover>
+Visual Anchor: <Key focal object, weapon, prop, or gaze lock to match next shot>
+Prop Lock: <State of critical entities, items, and environment>
+
+FORMAT 2: AI GENERATION PROMPTS FORMAT
+🤖 AI GENERATION PROMPTS — PART/SCENE N
+S1: <Direct generation prompt for AI video/image generator, e.g. Midjourney, Runway, Seedance, Pika>. Camera: <camera movement, angle>. VFX: <effects>.
+S2: ...
+Director's Note: <Tactical directorial advice, emotional inflection points, audio cues, and continuity warnings>.
+
 Rules for Cue Generation:
 When asked to sync or generate cues, you must ALWAYS provide verbatim selectedText copied strictly from the user's screenplay.
 If you output cues, enclose them in a JSON block like:
@@ -724,25 +749,6 @@ export async function sendCopilotMessage({
   } catch (err: any) {
     if (isHighDemandOrQuotaError(err.message)) {
       markModelBusy(modelConfig.id);
-
-      // In Auto Orchestrator mode, automatically attempt a fallback to an alternate configured model
-      if (isAutoOrchestrator) {
-        const fallbacks = allModels.filter(
-          m => m.id !== modelConfig.id && isProviderConfigured(m.provider, keys) && !isModelBusy(m.id)
-        );
-        fallbacks.sort((a, b) => getModelRecencyScore(b) - getModelRecencyScore(a));
-
-        if (fallbacks.length > 0) {
-          const fallbackModel = fallbacks[0];
-          try {
-            const fallbackResult = await executeProviderCall(fallbackModel);
-            unmarkModelBusy(fallbackModel.id);
-            return `> ⚠️ **Auto-Rerouted from ${modelConfig.name} due to provider server high demand.**\n> SceneFlow Copilot completed your directorial request using **${fallbackModel.name}**.\n\n${fallbackResult}`;
-          } catch {
-            // Fallback also failed, throw original error
-          }
-        }
-      }
     }
     throw err;
   }

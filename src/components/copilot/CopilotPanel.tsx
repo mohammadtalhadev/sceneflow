@@ -81,7 +81,7 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
 }) => {
   const [selectedModel, setSelectedModel] = useState<string>(() => getSavedModel());
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>(() => getAllAvailableModels());
-  const [isAutoOrchestrator, setIsAutoOrchestrator] = useState<boolean>(true);
+  const [isAutoOrchestrator, setIsAutoOrchestrator] = useState<boolean>(false);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState('');
@@ -593,45 +593,6 @@ What would you like to direct?`,
           </div>
         </div>
 
-        {/* Mode Selector Strip: Auto Orchestrator vs Single Model */}
-        <div className="px-3 py-1.5 bg-surface-subtle border-b border-border-subtle flex items-center justify-between text-[10px] shrink-0">
-          <div className="flex items-center gap-1.5">
-            <span className="font-bold text-text-muted uppercase tracking-wider text-[9px]">Mode:</span>
-            <div className="flex items-center gap-0.5 bg-surface border border-border-subtle rounded-lg p-0.5 shadow-2xs">
-              <button
-                type="button"
-                onClick={() => setIsAutoOrchestrator(true)}
-                title="AI automatically analyzes task and assigns Google Lyria (Audio), Nano Banana Pro (Visuals), and Gemini/Claude (Script)"
-                className={cn(
-                  "px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider transition-all flex items-center gap-1",
-                  isAutoOrchestrator
-                    ? "bg-purple-600 text-white shadow-xs"
-                    : "text-text-muted hover:text-text-main"
-                )}
-              >
-                <Zap size={10} className={isAutoOrchestrator ? "text-amber-300" : ""} />
-                <span>Auto Orchestrator</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsAutoOrchestrator(false)}
-                title="Direct standard query to selected model only"
-                className={cn(
-                  "px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider transition-all flex items-center gap-1",
-                  !isAutoOrchestrator
-                    ? "bg-surface-subtle border border-border-main text-text-main shadow-xs"
-                    : "text-text-muted hover:text-text-main"
-                )}
-              >
-                <span>Single Model</span>
-              </button>
-            </div>
-          </div>
-
-          <span className="text-[9px] font-mono text-purple-600 dark:text-purple-400 font-bold hidden sm:inline">
-            {isAutoOrchestrator ? 'Lyria • Nano Banana' : 'Direct'}
-          </span>
-        </div>
 
         {/* Model Selector Bar */}
         <div ref={dropdownRef} className="relative px-3.5 py-1.5 border-b border-border-subtle bg-surface flex items-center justify-between text-xs shrink-0">
@@ -953,9 +914,7 @@ What would you like to direct?`,
             <div className="flex items-center gap-2 text-text-muted text-[11px] p-2 animate-pulse">
               <RefreshCw size={13} className="animate-spin text-purple-500" />
               <span>
-                {isAutoOrchestrator 
-                  ? `Orchestrating Lyria (Sound) + Nano Banana (Visuals) via ${currentModelObj.name}...` 
-                  : `Directing scene with ${currentModelObj.name}...`}
+                Directing scene with {currentModelObj.name}...
               </span>
             </div>
           )}
