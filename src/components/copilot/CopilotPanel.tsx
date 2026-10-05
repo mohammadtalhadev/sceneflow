@@ -31,6 +31,8 @@ import {
   saveCustomModels,
   getSavedCustomModels,
   getSavedApiKeys,
+  rankAndGroupModels,
+  isProviderConfigured,
   type AIModelOption,
   type AIProvider
 } from '../../services/aiService';
@@ -81,6 +83,10 @@ export const CopilotPanel: React.FC<CopilotPanelProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const currentModelObj = useMemo(() => {
+    return availableModels.find(m => m.id === selectedModel) || availableModels[0];
+  }, [availableModels, selectedModel]);
+
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
       id: 'welcome',
@@ -104,8 +110,20 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const reloadModelCatalog = useCallback(() => {
-    setAvailableModels(getAllAvailableModels());
-  }, []);
+    const all = getAllAvailableModels();
+    setAvailableModels(all);
+    const keys = getSavedApiKeys();
+    const ranked = rankAndGroupModels(all, keys);
+    // If current selectedModel has no key but another does, auto-select the top configured model
+    const currentIsConfigured = isProviderConfigured(
+      all.find(m => m.id === selectedModel)?.provider || 'gemini',
+      keys
+    );
+    if (!currentIsConfigured && ranked.configured.length > 0) {
+      setSelectedModel(ranked.configured[0].id);
+      saveSelectedModel(ranked.configured[0].id);
+    }
+  }, [selectedModel]);
 
   useEffect(() => {
     if (isOpen) {
@@ -264,19 +282,61 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
     );
   };
 
-  const filteredModels = useMemo(() => {
-    return availableModels.filter(m => {
+  const groupedRanked = useMemo(() => {
+    const keys = getSavedApiKeys();
+    const ranked = rankAndGroupModels(availableModels, keys);
+
+    const filterFn = (m: AIModelOption) => {
       const matchesProvider = providerFilter === 'all' || m.provider === providerFilter;
       const q = modelSearch.toLowerCase().trim();
       const matchesQuery = !q || m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q);
       return matchesProvider && matchesQuery;
-    });
+    };
+
+    return {
+      configured: ranked.configured.filter(filterFn),
+      unconfigured: ranked.unconfigured.filter(filterFn),
+      totalCount: ranked.allRanked.filter(filterFn).length,
+    };
   }, [availableModels, providerFilter, modelSearch]);
 
   if (!isOpen) return null;
 
-  const currentModelObj = availableModels.find(m => m.id === selectedModel) || availableModels[0];
   const currentBadge = PROVIDER_BADGES[currentModelObj.provider] || PROVIDER_BADGES.gemini;
+
+  const renderModelItem = (model: AIModelOption, isConfigured: boolean) => {
+    const badge = PROVIDER_BADGES[model.provider] || PROVIDER_BADGES.gemini;
+    const isSelected = model.id === selectedModel;
+    return (
+      <button
+        key={model.id}
+        type="button"
+        onClick={() => handleSelectModel(model.id)}
+        className={cn(
+          "w-full text-left px-2.5 py-1.5 text-[11px] transition-colors flex flex-col gap-0.5 rounded-lg",
+          isSelected ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold" : "hover:bg-surface-subtle text-text-main"
+        )}
+      >
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1.5 truncate">
+            {isConfigured && (
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0 shadow-2xs" title="Key Active & Configured" />
+            )}
+            <span className="truncate font-semibold">{model.name}</span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <span className={cn("text-[8px] px-1 py-0.2 rounded font-mono border font-bold", badge.colorClass)}>
+              {badge.label}
+            </span>
+            {isSelected && <Check size={12} className="text-purple-600 dark:text-purple-400" />}
+          </div>
+        </div>
+        <span className="text-[9.5px] text-text-muted font-normal line-clamp-1">
+          {model.desc}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <>
@@ -320,8 +380,26 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
             {/* Clear Thread */}
             <button
               type="button"
-              onClick={() => setMessages([messages[0]])}
-              title="Clear Chat History"
+              onClick={() => {
+                setMessages([
+                  {
+                    id: `welcome-${Date.now()}`,
+                    role: 'assistant',
+                    content: `Hello Director! I am your **AI Production Copilot** running on **${currentModelObj.name}** for Cinema Direction & Virtual Production.
+
+I can:
+• **Auto-sync cues** between your video and screenplay
+• **Orchestrate specialized AI models** across sound (Google Lyria), visual keyframes (Nano Banana Pro / Imagen), and script sync (${currentModelObj.name})
+• **Design camera choreography & staging** with 3D blocking and lens focal lengths
+• **Audit cinematic continuity** and narrative pacing
+• **Access 200+ models** via OpenRouter, Google Gemini, OpenAI, Claude, or local Ollama
+
+What would you like to direct?`,
+                    timestamp: Date.now(),
+                  },
+                ]);
+              }}
+              title="Reset Conversation"
               className="p-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-surface border border-transparent hover:border-border-subtle transition-colors"
             >
               <Trash2 size={13} />
@@ -397,7 +475,7 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
             <ChevronDown size={11} className={cn("transition-transform shrink-0", isModelDropdownOpen && "rotate-180")} />
           </button>
 
-          {/* Upgraded Multi-Model Dropdown Drawer */}
+          {/* Upgraded Multi-Model Dropdown Drawer with Configured-First Ranking */}
           {isModelDropdownOpen && (
             <div className="absolute top-full right-2 left-2 mt-1 bg-surface rounded-xl shadow-2xl border border-border-main p-2 z-50 flex flex-col max-h-[380px] animate-in fade-in zoom-in-95 duration-100">
               {/* Search & Actions Bar */}
@@ -406,7 +484,7 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
                   <Search size={11} className="text-text-muted shrink-0" />
                   <input
                     type="text"
-                    placeholder="Search 200+ models (claude, deepseek, gpt-4o)..."
+                    placeholder="Search models (e.g. 3.1, 2.0, claude, deepseek)..."
                     value={modelSearch}
                     onChange={(e) => setModelSearch(e.target.value)}
                     className="w-full bg-transparent text-[11px] focus:outline-none font-sans"
@@ -457,47 +535,45 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
                 )}
               </div>
 
-              {/* Models List */}
+              {/* Models List: Configured First & Ranked by Version Recency */}
               <div className="flex-1 overflow-y-auto divide-y divide-border-subtle/40 custom-scrollbar mt-1">
-                {filteredModels.length === 0 ? (
+                {groupedRanked.totalCount === 0 ? (
                   <div className="py-6 text-center text-text-muted text-[11px]">
                     No models match "{modelSearch}"
                   </div>
                 ) : (
-                  filteredModels.map(model => {
-                    const badge = PROVIDER_BADGES[model.provider] || PROVIDER_BADGES.gemini;
-                    const isSelected = model.id === selectedModel;
-                    return (
-                      <button
-                        key={model.id}
-                        type="button"
-                        onClick={() => handleSelectModel(model.id)}
-                        className={cn(
-                          "w-full text-left px-2.5 py-1.5 text-[11px] transition-colors flex flex-col gap-0.5 rounded-lg",
-                          isSelected ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold" : "hover:bg-surface-subtle text-text-main"
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="truncate font-semibold">{model.name}</span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <span className={cn("text-[8px] px-1 py-0.2 rounded font-mono border font-bold", badge.colorClass)}>
-                              {badge.label}
-                            </span>
-                            {isSelected && <Check size={12} className="text-purple-600 dark:text-purple-400" />}
+                  <>
+                    {/* Section 1: Configured Models (Keys Entered) - Enlisted First & Ranked by Recency */}
+                    {groupedRanked.configured.length > 0 && (
+                      <div className="pb-1">
+                        <div className="px-2 py-1 text-[9px] font-black uppercase tracking-wider text-green-600 dark:text-green-400 flex items-center justify-between bg-green-500/10 rounded-lg mx-1 my-1 border border-green-500/20">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                            <span>Ready & Key Active ({groupedRanked.configured.length})</span>
                           </div>
+                          <span className="text-[8px] font-mono text-green-700 dark:text-green-300 font-bold">Latest First</span>
                         </div>
-                        <span className="text-[9.5px] text-text-muted font-normal line-clamp-1">
-                          {model.desc}
-                        </span>
-                      </button>
-                    );
-                  })
+                        {groupedRanked.configured.map(model => renderModelItem(model, true))}
+                      </div>
+                    )}
+
+                    {/* Section 2: Other Models (Key Required) */}
+                    {groupedRanked.unconfigured.length > 0 && (
+                      <div className="pt-1">
+                        <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-text-muted flex items-center justify-between mx-1">
+                          <span>Other Models (Requires Key)</span>
+                          <span className="text-[8px] font-mono text-text-muted">Ranked by Version</span>
+                        </div>
+                        {groupedRanked.unconfigured.map(model => renderModelItem(model, false))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
               {/* Footer info */}
               <div className="pt-1.5 border-t border-border-subtle text-[9px] text-text-muted flex items-center justify-between px-1 shrink-0">
-                <span>{filteredModels.length} models available</span>
+                <span>{groupedRanked.totalCount} models (Enlisted by Key & Version)</span>
                 <button 
                   type="button" 
                   onClick={() => { setIsModelDropdownOpen(false); setIsKeyModalOpen(true); }}
@@ -530,8 +606,17 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
                 msg.role === 'user' ? "items-end" : "items-start"
               )}
             >
-              <div className="text-[9.5px] font-bold text-text-muted uppercase tracking-wider px-1">
-                {msg.role === 'user' ? 'You' : 'AI Director'}
+              <div className="text-[9.5px] font-bold text-text-muted uppercase tracking-wider px-1 flex items-center gap-1.5">
+                {msg.role === 'user' ? (
+                  <span>You</span>
+                ) : (
+                  <>
+                    <span className="text-text-main font-black">AI Director</span>
+                    <span className="text-[8px] px-1 py-0.2 rounded font-mono bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20">
+                      {currentModelObj.name}
+                    </span>
+                  </>
+                )}
               </div>
 
               <div
@@ -583,7 +668,7 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
               <RefreshCw size={13} className="animate-spin text-purple-500" />
               <span>
                 {isAutoOrchestrator 
-                  ? 'Orchestrating Lyria (Sound) + Nano Banana (Visuals) + Script...' 
+                  ? `Orchestrating Lyria (Sound) + Nano Banana (Visuals) via ${currentModelObj.name}...` 
                   : `Directing scene with ${currentModelObj.name}...`}
               </span>
             </div>
@@ -644,7 +729,7 @@ You can use **Auto Orchestrator** to automatically assign optimal models for eac
               <textarea
                 ref={textareaRef}
                 rows={2}
-                placeholder="Direct scene (e.g. 'Generate Lyria music cues and Nano Banana camera visual for this scene')..."
+                placeholder={`Ask ${currentModelObj.name} (e.g. 'Generate Lyria audio cues and Nano Banana camera visual')...`}
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
                 onKeyDown={(e) => {

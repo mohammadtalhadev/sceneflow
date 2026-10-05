@@ -13,12 +13,49 @@ export interface AIModelOption {
 }
 
 export const DEFAULT_MODELS: AIModelOption[] = [
+  // --- Google Direct (Fastest / Native Multimodal) ---
+  {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash (Direct)',
+    provider: 'gemini',
+    desc: 'Ultra-fast direct Google AI Studio connection (Recommended)',
+    isMultimodal: true,
+  },
+  {
+    id: 'gemini-2.0-flash-lite',
+    name: 'Gemini 2.0 Flash Lite (Direct)',
+    provider: 'gemini',
+    desc: 'Lightweight rapid response scene timing & cue extraction',
+    isMultimodal: true,
+  },
+  {
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro (Direct)',
+    provider: 'gemini',
+    desc: 'Deep cinematic reasoning & long-form screenplay analysis',
+    isMultimodal: true,
+  },
+  {
+    id: 'gemini-1.5-flash',
+    name: 'Gemini 1.5 Flash (Direct)',
+    provider: 'gemini',
+    desc: 'High-speed script parsing & timeline synchronization',
+    isMultimodal: true,
+  },
+
   // --- OpenRouter (Universal Multi-Model Gateway) ---
+  {
+    id: 'openrouter/anthropic/claude-3.7-sonnet',
+    name: 'Claude 3.7 Sonnet (OpenRouter)',
+    provider: 'openrouter',
+    desc: 'Latest flagship hybrid reasoning for cinematic auteur direction',
+    isMultimodal: true,
+  },
   {
     id: 'openrouter/anthropic/claude-3.5-sonnet',
     name: 'Claude 3.5 Sonnet (OpenRouter)',
     provider: 'openrouter',
-    desc: 'Cinematic auteur screenwriting & Seedance 2.5 continuity',
+    desc: 'Cinematic screenplay subtext and scene continuity',
     isMultimodal: true,
   },
   {
@@ -57,23 +94,30 @@ export const DEFAULT_MODELS: AIModelOption[] = [
     isMultimodal: true,
   },
 
-  // --- Google Direct ---
+  // --- Anthropic Direct ---
   {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash (Direct)',
-    provider: 'gemini',
-    desc: 'Ultra-fast direct Google AI Studio connection',
+    id: 'claude-3-7-sonnet',
+    name: 'Claude 3.7 Sonnet (Direct)',
+    provider: 'anthropic',
+    desc: 'Latest hybrid thinking model for intricate screenwriting',
     isMultimodal: true,
   },
   {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro (Direct)',
-    provider: 'gemini',
-    desc: 'Deep reasoning & long-form screenplay analysis',
+    id: 'claude-3-5-sonnet',
+    name: 'Claude 3.5 Sonnet (Direct)',
+    provider: 'anthropic',
+    desc: 'Industry standard for screenplays & auteur staging',
     isMultimodal: true,
   },
 
   // --- OpenAI Direct ---
+  {
+    id: 'o3-mini',
+    name: 'o3-mini (OpenAI Direct)',
+    provider: 'openai',
+    desc: 'High-speed reasoning model for temporal cue precision',
+    isMultimodal: false,
+  },
   {
     id: 'gpt-4o',
     name: 'GPT-4o (OpenAI Direct)',
@@ -87,15 +131,6 @@ export const DEFAULT_MODELS: AIModelOption[] = [
     provider: 'openai',
     desc: 'Fast, cost-effective scene drafting',
     isMultimodal: false,
-  },
-
-  // --- Anthropic Direct ---
-  {
-    id: 'claude-3-5-sonnet',
-    name: 'Claude 3.5 Sonnet (Direct)',
-    provider: 'anthropic',
-    desc: 'Industry standard for screenplays & Auteur staging',
-    isMultimodal: true,
   },
 
   // --- Ollama Local ---
@@ -189,17 +224,110 @@ export function saveApiKeys(keys: ApiKeysConfig): void {
   localStorage.setItem(STORAGE_KEYS_KEY, JSON.stringify(keys));
 }
 
+export function isProviderConfigured(provider: AIProvider, keys: ApiKeysConfig): boolean {
+  if (provider === 'openrouter') return Boolean(keys.openrouterApiKey);
+  if (provider === 'gemini') return Boolean(keys.geminiApiKey);
+  if (provider === 'openai') return Boolean(keys.openaiApiKey);
+  if (provider === 'anthropic') return Boolean(keys.anthropicApiKey);
+  if (provider === 'ollama') return Boolean(keys.ollamaUrl);
+  return false;
+}
+
+/**
+ * Computes a numeric recency/version priority score for a model.
+ * Models with higher version numbers (e.g. 3.7 > 3.5 > 3.1 > 2.5 > 2.0 > 1.5) rank higher.
+ * Flagship tiers (Flash, Pro, Sonnet, o3, R1) receive recency boosts.
+ */
+export function getModelRecencyScore(model: AIModelOption): number {
+  let score = 1000;
+  const text = `${model.id} ${model.name}`.toLowerCase();
+
+  // Extract explicit version numbers (e.g. 3.7, 3.5, 3.1, 2.5, 2.0, 1.5, 4.0)
+  const versionMatch = text.match(/(\d+\.\d+)/);
+  if (versionMatch) {
+    const v = parseFloat(versionMatch[1]);
+    score += v * 10000;
+  } else {
+    // Single digit version matching (e.g. gpt-4, llama-3, o1, o3)
+    const singleV = text.match(/(?:gpt-|llama-|claude-|gemini-|o)(\d+)/);
+    if (singleV) {
+      score += parseInt(singleV[1], 10) * 8000;
+    }
+  }
+
+  // Recency boosts for current-gen flagship architectures
+  if (text.includes('3.7')) score += 15000;
+  if (text.includes('3.5')) score += 10000;
+  if (text.includes('3.1')) score += 9000;
+  if (text.includes('2.5')) score += 8000;
+  if (text.includes('2.0') || text.includes('2-0')) score += 7000;
+  if (text.includes('flash')) score += 3000;
+  if (text.includes('r1')) score += 4000;
+  if (text.includes('4o')) score += 4000;
+  if (text.includes('o3')) score += 5000;
+  if (text.includes('exp') || text.includes('preview') || text.includes('latest')) score += 2000;
+
+  // Penalties for older/deprecated versions
+  if (text.includes('3.5-turbo')) score -= 15000;
+  if (text.includes('1.0') || text.includes('001-deprecated')) score -= 10000;
+
+  return score;
+}
+
+/**
+ * Intelligent Model Ranking Engine:
+ * 1. Configured providers (where an API key has been entered) rank FIRST!
+ * 2. Within configured models, sort by highest recency/version score (latest models on top).
+ * 3. Unconfigured models are listed below, also sorted by recency.
+ */
+export function rankAndGroupModels(
+  models: AIModelOption[],
+  keys: ApiKeysConfig
+): {
+  configured: AIModelOption[];
+  unconfigured: AIModelOption[];
+  allRanked: AIModelOption[];
+} {
+  const configured: AIModelOption[] = [];
+  const unconfigured: AIModelOption[] = [];
+
+  models.forEach(m => {
+    if (isProviderConfigured(m.provider, keys)) {
+      configured.push(m);
+    } else {
+      unconfigured.push(m);
+    }
+  });
+
+  // Sort both arrays by recency score descending (highest version first)
+  configured.sort((a, b) => getModelRecencyScore(b) - getModelRecencyScore(a));
+  unconfigured.sort((a, b) => getModelRecencyScore(b) - getModelRecencyScore(a));
+
+  return {
+    configured,
+    unconfigured,
+    allRanked: [...configured, ...unconfigured],
+  };
+}
+
 export function getSavedModel(): string {
+  const keys = getSavedApiKeys();
+  const allModels = getAllAvailableModels();
+  const { configured, allRanked } = rankAndGroupModels(allModels, keys);
+
   if (typeof localStorage !== 'undefined') {
     const saved = localStorage.getItem(STORAGE_SELECTED_MODEL);
-    if (saved) return saved;
+    if (saved && allModels.some(m => m.id === saved)) {
+      return saved;
+    }
   }
-  // Default to OpenRouter if an OpenRouter key exists, else Gemini 2.0 Flash
-  const keys = getSavedApiKeys();
-  if (keys.openrouterApiKey) {
-    return 'openrouter/anthropic/claude-3.5-sonnet';
+
+  // If user has configured keys, default to the top-ranked configured model!
+  if (configured.length > 0) {
+    return configured[0].id;
   }
-  return 'gemini-2.0-flash';
+
+  return allRanked[0]?.id || 'gemini-2.0-flash';
 }
 
 export function saveSelectedModel(modelId: string): void {
@@ -278,7 +406,7 @@ export async function fetchModelsForProvider(
     const json = await res.json();
     const list: any[] = json.data || [];
 
-    return list.map(item => ({
+    const fetched = list.map(item => ({
       id: `openrouter/${item.id}`,
       name: item.name || item.id,
       provider: 'openrouter' as AIProvider,
@@ -289,6 +417,10 @@ export async function fetchModelsForProvider(
       contextLength: item.context_length,
       isCustom: true,
     }));
+
+    // Sort by recency score
+    fetched.sort((a, b) => getModelRecencyScore(b) - getModelRecencyScore(a));
+    return fetched;
   }
 
   if (provider === 'gemini') {
@@ -303,7 +435,7 @@ export async function fetchModelsForProvider(
     const json = await res.json();
     const models: any[] = json.models || [];
 
-    return models
+    const fetched = models
       .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
       .map(m => {
         const cleanId = m.name.replace(/^models\//, '');
@@ -316,6 +448,9 @@ export async function fetchModelsForProvider(
           isCustom: true,
         };
       });
+
+    fetched.sort((a, b) => getModelRecencyScore(b) - getModelRecencyScore(a));
+    return fetched;
   }
 
   if (provider === 'openai') {
@@ -333,7 +468,7 @@ export async function fetchModelsForProvider(
     const json = await res.json();
     const list: any[] = json.data || [];
 
-    return list
+    const fetched = list
       .filter(m => m.id.startsWith('gpt-') || m.id.startsWith('o1') || m.id.startsWith('o3'))
       .map(m => ({
         id: m.id,
@@ -343,6 +478,9 @@ export async function fetchModelsForProvider(
         isMultimodal: m.id.includes('4o'),
         isCustom: true,
       }));
+
+    fetched.sort((a, b) => getModelRecencyScore(b) - getModelRecencyScore(a));
+    return fetched;
   }
 
   if (provider === 'ollama') {
@@ -378,13 +516,10 @@ When analyzing creative requests, orchestrate and delegate specialized sub-tasks
    - Formulates Foley, environmental ambience, and precise audio cues with timestamps.
 2. VISUAL CONCEPT ART & KEYFRAMING (Nano Banana Pro / Imagen 3 / FLUX.1 Pro):
    - Formulates photorealistic scene prompts with camera lens (e.g. 35mm anamorphic, f/1.8), lighting ratios, color temperature, and volumetric depth.
-3. SCRIPT, DIALOGUE & CUE SYNCHRONIZATION (Google Gemini 2.0 Flash / Claude 3.5 Sonnet):
+3. SCRIPT, DIALOGUE & CUE SYNCHRONIZATION:
    - Formulates screenplay pacing, subtextual dialogue beats, and frame-accurate timeline cues across SceneFlow's 8 categories: dialogue, action, camera, shot, audio, vfx, transition, environment.
 4. CAMERA CHOREOGRAPHY & CONTINUITY:
    - 3D spatial staging, lens focal length, dolly/pan motion velocity, and continuity anchors.
-
-ORCHESTRATION OUTPUT FORMAT:
-When orchestrating a scene, begin with a concise "🎬 Director Delegation Plan" specifying which specialized model leads each discipline, then deliver production-ready assets (Sound specs, Keyframe visual prompts, and Screenplay cues).
 
 Rules for Cue Generation:
 When asked to sync or generate cues, you must ALWAYS provide verbatim selectedText copied strictly from the user's screenplay.
@@ -415,6 +550,52 @@ If asked to rewrite or update the screenplay, enclose the full script text in:
 
 Always be insightful, concise, and focused on cinematic execution.`;
 
+/**
+ * Builds runtime system prompt with dynamic model identity contract
+ * to completely eliminate hallucinations regarding model identity.
+ */
+function buildRuntimeSystemPrompt(
+  modelConfig: AIModelOption,
+  isAutoOrchestrator: boolean,
+  videoName?: string,
+  videoDuration?: number,
+  scriptText?: string
+): string {
+  const orchestrationDirectives = isAutoOrchestrator ? `
+MULTI-MODEL PRODUCTION DELEGATION DIRECTIVE (ACTIVE):
+You are functioning as the Lead AI Director orchestrating specialized AI models for maximum cinematic output:
+- Sound Generation & Foley: Delegate to Google Lyria (music tempo, key, acoustic layers, audio cue timestamps).
+- Visual Keyframes & Concept Art: Delegate to Nano Banana Pro / Imagen 3 (photorealistic camera prompts, lens mm, lighting setup).
+- Screenplay & Timeline Cues: Executed with precision on this active model (dialogue beats, verbatim cues).
+
+At the start of your response, state the "🎬 Director Delegation Matrix" clearly:
+### 🎬 Director Delegation Matrix
+• 🎵 **Sound & Score**: Google Lyria (Adaptive music, tempo & ambient design)
+• 🎨 **Visual Keyframes**: Nano Banana Pro (Photorealistic camera & lighting prompts)
+• 📐 **Script & Cues**: ${modelConfig.name} (Screenplay cues & temporal pacing)
+
+Then present each department's assets and timeline cues ready to apply!` : '';
+
+  return `${COPILOT_SYSTEM_PROMPT}
+
+[STRICT RUNTIME IDENTITY CONTRACT]
+Your active model runtime is: "${modelConfig.name}" (Model ID: "${modelConfig.id}", Provider: "${modelConfig.provider.toUpperCase()}").
+- You MUST identify yourself strictly as "${modelConfig.name}".
+- When asked what model you are running or what your version is, state: "I am running as ${modelConfig.name} in SceneFlow Studio".
+- NEVER claim you are Claude if your active model is Gemini, and NEVER claim you are Gemini if your active model is Claude or OpenAI.
+- NEVER claim you are running on "Seedance 2.5" or "2.5 Cinema Edition". You are the SceneFlow Studio Cinema Production Copilot.
+- Speak with the highest factual accuracy, grounded in the screenplay text.
+
+${orchestrationDirectives}
+
+CURRENT ACTIVE FILM CONTEXT:
+- Video Clip: ${videoName || 'Loaded clip'} (${videoDuration ? `${videoDuration.toFixed(1)}s` : 'unknown duration'})
+- Screenplay Text:
+<ScriptText>
+${scriptText || '(No script currently loaded)'}
+</ScriptText>`;
+}
+
 export async function sendCopilotMessage({
   messages,
   modelId,
@@ -442,7 +623,7 @@ export async function sendCopilotMessage({
     if (!key) {
       throw new Error('Please configure your OpenRouter API key in Copilot Settings (click 🔑).');
     }
-    return callOpenRouterDirect(key, modelId, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+    return callOpenRouterDirect(key, modelConfig, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
   }
 
   // 2. Google Gemini Direct
@@ -451,7 +632,7 @@ export async function sendCopilotMessage({
     if (!key) {
       throw new Error('Please configure your Google Gemini API key in Copilot Settings (click 🔑).');
     }
-    return callGeminiDirect(key, modelId, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+    return callGeminiDirect(key, modelConfig, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
   }
 
   // 3. OpenAI Direct
@@ -460,27 +641,25 @@ export async function sendCopilotMessage({
     if (!key) {
       throw new Error('Please configure your OpenAI API key in Copilot Settings (click 🔑).');
     }
-    return callOpenAIDirect(key, modelId, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+    return callOpenAIDirect(key, modelConfig, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
   }
 
   // 4. Anthropic Claude Direct
   if (modelConfig.provider === 'anthropic') {
     const key = keys.anthropicApiKey;
     if (!key) {
-      // If no Anthropic key, check if OpenRouter key is present as seamless fallback!
       if (keys.openrouterApiKey) {
-        return callOpenRouterDirect(keys.openrouterApiKey, 'anthropic/claude-3.5-sonnet', messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+        return callOpenRouterDirect(keys.openrouterApiKey, modelConfig, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
       }
       throw new Error('Please configure your Anthropic or OpenRouter API key in Copilot Settings (click 🔑).');
     }
-    return callAnthropicDirect(key, modelId, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
+    return callAnthropicDirect(key, modelConfig, messages, scriptText, videoDuration, videoName, isAutoOrchestrator);
   }
 
   // 5. Ollama Local
   if (modelConfig.provider === 'ollama') {
     const url = keys.ollamaUrl || 'http://localhost:11434';
-    const rawModel = modelId.replace(/^ollama\//, '') || keys.ollamaModel || 'llama3';
-    return callOllamaDirect(url, rawModel, messages, scriptText, isAutoOrchestrator);
+    return callOllamaDirect(url, modelConfig, messages, scriptText, isAutoOrchestrator);
   }
 
   throw new Error(`Provider for ${modelConfig.name} is not configured. Please check your API keys.`);
@@ -491,34 +670,17 @@ export async function sendCopilotMessage({
  */
 async function callOpenRouterDirect(
   apiKey: string,
-  modelId: string,
+  modelConfig: AIModelOption,
   messages: ChatMessage[],
   scriptText: string,
   videoDuration?: number,
   videoName?: string,
   isAutoOrchestrator: boolean = true
 ): Promise<string> {
-  const cleanModelId = modelId.replace(/^openrouter\//, '');
+  const cleanModelId = modelConfig.id.replace(/^openrouter\//, '');
   const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
 
-  const orchestrationPrompt = isAutoOrchestrator ? `
-MULTI-MODEL PRODUCTION DELEGATION DIRECTIVE:
-You are acting as the Lead AI Director orchestrating specialized AI models:
-- Sound Generation & Foley: Delegate to Google Lyria (music tempo, key, acoustic layers, audio cue timestamps).
-- Visual Keyframes & Concept Art: Delegate to Nano Banana Pro / Imagen 3 (photorealistic camera prompts, lens mm, lighting setup).
-- Screenplay & Timeline Cues: Delegate to Google Gemini / Claude (dialogue beats, verbatim cues).
-
-State the "🎬 Director Delegation Matrix" clearly at the top, followed by each department's assets and JSON cues.` : '';
-
-  const systemContent = `${COPILOT_SYSTEM_PROMPT}
-${orchestrationPrompt}
-
-CURRENT ACTIVE FILM CONTEXT:
-- Video Clip: ${videoName || 'Loaded clip'} (${videoDuration ? `${videoDuration.toFixed(1)}s` : 'unknown duration'})
-- Screenplay Text:
-<ScriptText>
-${scriptText || '(No script currently loaded)'}
-</ScriptText>`;
+  const systemContent = buildRuntimeSystemPrompt(modelConfig, isAutoOrchestrator, videoName, videoDuration, scriptText);
 
   const payloadMessages = [
     { role: 'system', content: systemContent },
@@ -537,6 +699,7 @@ ${scriptText || '(No script currently loaded)'}
       model: cleanModelId,
       messages: payloadMessages,
       temperature: 0.7,
+      top_p: 0.95,
     }),
   });
 
@@ -555,40 +718,22 @@ ${scriptText || '(No script currently loaded)'}
 
 async function callGeminiDirect(
   apiKey: string,
-  model: string,
+  modelConfig: AIModelOption,
   messages: ChatMessage[],
   scriptText: string,
   videoDuration?: number,
   videoName?: string,
   isAutoOrchestrator: boolean = true
 ): Promise<string> {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const cleanModelId = modelConfig.id.replace(/^models\//, '');
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModelId}:generateContent?key=${apiKey}`;
 
-  const orchestrationPrompt = isAutoOrchestrator ? `
-MULTI-MODEL PRODUCTION DELEGATION DIRECTIVE:
-You are acting as the Lead AI Director orchestrating specialized AI models:
-- Sound Generation & Foley: Delegate to Google Lyria (music tempo, key, acoustic layers, audio cue timestamps).
-- Visual Keyframes & Concept Art: Delegate to Nano Banana Pro / Imagen 3 (photorealistic camera prompts, lens mm, lighting setup).
-- Screenplay & Timeline Cues: Delegate to Google Gemini / Claude (dialogue beats, verbatim cues).
-
-State the "🎬 Director Delegation Matrix" clearly at the top, followed by each department's assets and JSON cues.` : '';
+  const systemContent = buildRuntimeSystemPrompt(modelConfig, isAutoOrchestrator, videoName, videoDuration, scriptText);
 
   const contents = [
     {
       role: 'user',
-      parts: [
-        {
-          text: `${COPILOT_SYSTEM_PROMPT}
-${orchestrationPrompt}
-
-CURRENT ACTIVE FILM CONTEXT:
-- Video Clip: ${videoName || 'Loaded clip'} (${videoDuration ? `${videoDuration.toFixed(1)}s` : 'unknown duration'})
-- Screenplay Text:
-<ScriptText>
-${scriptText || '(No script currently loaded)'}
-</ScriptText>`,
-        },
-      ],
+      parts: [{ text: systemContent }],
     },
     ...messages.map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
@@ -599,7 +744,13 @@ ${scriptText || '(No script currently loaded)'}
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents }),
+    body: JSON.stringify({ 
+      contents,
+      generationConfig: {
+        temperature: 0.7,
+        topP: 0.95,
+      },
+    }),
   });
 
   if (!res.ok) {
@@ -617,7 +768,7 @@ ${scriptText || '(No script currently loaded)'}
 
 async function callOpenAIDirect(
   apiKey: string,
-  model: string,
+  modelConfig: AIModelOption,
   messages: ChatMessage[],
   scriptText: string,
   videoDuration?: number,
@@ -626,24 +777,7 @@ async function callOpenAIDirect(
 ): Promise<string> {
   const endpoint = 'https://api.openai.com/v1/chat/completions';
 
-  const orchestrationPrompt = isAutoOrchestrator ? `
-MULTI-MODEL PRODUCTION DELEGATION DIRECTIVE:
-You are acting as the Lead AI Director orchestrating specialized AI models:
-- Sound Generation & Foley: Delegate to Google Lyria (music tempo, key, acoustic layers, audio cue timestamps).
-- Visual Keyframes & Concept Art: Delegate to Nano Banana Pro / Imagen 3 (photorealistic camera prompts, lens mm, lighting setup).
-- Screenplay & Timeline Cues: Delegate to Google Gemini / Claude (dialogue beats, verbatim cues).
-
-State the "🎬 Director Delegation Matrix" clearly at the top, followed by each department's assets and JSON cues.` : '';
-
-  const systemContent = `${COPILOT_SYSTEM_PROMPT}
-${orchestrationPrompt}
-
-CURRENT ACTIVE FILM CONTEXT:
-- Video Clip: ${videoName || 'Loaded clip'} (${videoDuration ? `${videoDuration.toFixed(1)}s` : 'unknown duration'})
-- Screenplay Text:
-<ScriptText>
-${scriptText || '(No script currently loaded)'}
-</ScriptText>`;
+  const systemContent = buildRuntimeSystemPrompt(modelConfig, isAutoOrchestrator, videoName, videoDuration, scriptText);
 
   const payloadMessages = [
     { role: 'system', content: systemContent },
@@ -657,9 +791,10 @@ ${scriptText || '(No script currently loaded)'}
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: model === 'gpt-4o-mini' ? 'gpt-4o-mini' : 'gpt-4o',
+      model: modelConfig.id === 'gpt-4o-mini' ? 'gpt-4o-mini' : (modelConfig.id === 'o3-mini' ? 'o3-mini' : 'gpt-4o'),
       messages: payloadMessages,
       temperature: 0.7,
+      top_p: 0.95,
     }),
   });
 
@@ -674,7 +809,7 @@ ${scriptText || '(No script currently loaded)'}
 
 async function callAnthropicDirect(
   apiKey: string,
-  model: string,
+  modelConfig: AIModelOption,
   messages: ChatMessage[],
   scriptText: string,
   videoDuration?: number,
@@ -683,29 +818,16 @@ async function callAnthropicDirect(
 ): Promise<string> {
   const endpoint = 'https://api.anthropic.com/v1/messages';
 
-  const orchestrationPrompt = isAutoOrchestrator ? `
-MULTI-MODEL PRODUCTION DELEGATION DIRECTIVE:
-You are acting as the Lead AI Director orchestrating specialized AI models:
-- Sound Generation & Foley: Delegate to Google Lyria (music tempo, key, acoustic layers, audio cue timestamps).
-- Visual Keyframes & Concept Art: Delegate to Nano Banana Pro / Imagen 3 (photorealistic camera prompts, lens mm, lighting setup).
-- Screenplay & Timeline Cues: Delegate to Google Gemini / Claude (dialogue beats, verbatim cues).
-
-State the "🎬 Director Delegation Matrix" clearly at the top, followed by each department's assets and JSON cues.` : '';
-
-  const systemContent = `${COPILOT_SYSTEM_PROMPT}
-${orchestrationPrompt}
-
-CURRENT ACTIVE FILM CONTEXT:
-- Video Clip: ${videoName || 'Loaded clip'} (${videoDuration ? `${videoDuration.toFixed(1)}s` : 'unknown duration'})
-- Screenplay Text:
-<ScriptText>
-${scriptText || '(No script currently loaded)'}
-</ScriptText>`;
+  const systemContent = buildRuntimeSystemPrompt(modelConfig, isAutoOrchestrator, videoName, videoDuration, scriptText);
 
   const payloadMessages = messages.map(m => ({
     role: m.role === 'assistant' ? 'assistant' : 'user',
     content: m.content,
   }));
+
+  const modelId = modelConfig.id.includes('3-7') 
+    ? 'claude-3-7-sonnet-20250219' 
+    : 'claude-3-5-sonnet-20241022';
 
   const res = await fetch(endpoint, {
     method: 'POST',
@@ -716,7 +838,7 @@ ${scriptText || '(No script currently loaded)'}
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
+      model: modelId,
       max_tokens: 4096,
       system: systemContent,
       messages: payloadMessages,
@@ -734,35 +856,30 @@ ${scriptText || '(No script currently loaded)'}
 
 async function callOllamaDirect(
   ollamaUrl: string,
-  model: string,
+  modelConfig: AIModelOption,
   messages: ChatMessage[],
   scriptText: string,
   isAutoOrchestrator: boolean = true
 ): Promise<string> {
   const endpoint = `${ollamaUrl.replace(/\/$/, '')}/api/chat`;
 
-  const orchestrationPrompt = isAutoOrchestrator ? `
-MULTI-MODEL PRODUCTION DELEGATION DIRECTIVE:
-You are acting as the Lead AI Director orchestrating specialized AI models:
-- Sound Generation & Foley: Delegate to Google Lyria (music tempo, key, acoustic layers, audio cue timestamps).
-- Visual Keyframes & Concept Art: Delegate to Nano Banana Pro / Imagen 3 (photorealistic camera prompts, lens mm, lighting setup).
-- Screenplay & Timeline Cues: Delegate to Google Gemini / Claude (dialogue beats, verbatim cues).
-
-State the "🎬 Director Delegation Matrix" clearly at the top, followed by each department's assets and JSON cues.` : '';
+  const systemContent = buildRuntimeSystemPrompt(modelConfig, isAutoOrchestrator, undefined, undefined, scriptText);
 
   const payloadMessages = [
     {
       role: 'system',
-      content: `${COPILOT_SYSTEM_PROMPT}\n${orchestrationPrompt}\n\nCURRENT SCRIPT:\n${scriptText}`,
+      content: systemContent,
     },
     ...messages.map(m => ({ role: m.role, content: m.content })),
   ];
+
+  const rawModel = modelConfig.id.replace(/^ollama\//, '') || 'llama3';
 
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model,
+      model: rawModel,
       messages: payloadMessages,
       stream: false,
     }),
