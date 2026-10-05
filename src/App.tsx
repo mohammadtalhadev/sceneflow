@@ -19,8 +19,9 @@ const RawCuesModal = lazy(() => import('./components/RawCuesModal').then(m => ({
 const TimingSettingsModal = lazy(() => import('./components/TimingSettingsModal').then(m => ({ default: m.TimingSettingsModal })));
 const ScriptColorModal = lazy(() => import('./components/ScriptColorModal').then(m => ({ default: m.ScriptColorModal })));
 const MobileColorModal = lazy(() => import('./components/MobileColorModal').then(m => ({ default: m.MobileColorModal })));
-const AppInfoModal = lazy(() => import('./components/AppInfoModal').then(m => ({ default: m.AppInfoModal })));
-const KeyboardShortcutsModal = lazy(() => import('./components/KeyboardShortcutsModal').then(m => ({ default: m.KeyboardShortcutsModal })));
+import { AppInfoModal } from './components/AppInfoModal';
+import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { CopilotPanel } from './components/copilot';
 import { WorkstationLeftPanel } from './components/left-panel';
 import { EditRightPanel, CueEditorForm, CueEditorProvider, type CueEditorContextValue } from './components/edit';
 import { SplitPaneDivider, InspectorSplitDivider } from './components/common';
@@ -85,6 +86,7 @@ export default function App() {
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeHeaderMenu, setActiveHeaderMenu] = useState<HeaderMenuId | null>(null);
   const [rawCuesText, setRawCuesText] = useState("");
 
@@ -377,6 +379,7 @@ export default function App() {
     onOpenRawScript: () => handleOpenRawScriptModal(),
     onOpenRawCues: () => handleOpenRawCuesModal(),
     onOpenLibrary: () => setIsLibraryOpen(true),
+    onToggleCopilot: () => setIsCopilotOpen(prev => !prev),
     disabled: isAnyModalOpen,
   });
 
@@ -673,6 +676,17 @@ export default function App() {
     }
   }, [state.cues, setState]);
 
+  const handleApplyCopilotCues = useCallback((newCues: Cue[]) => {
+    setState(prev => ({
+      ...prev,
+      cues: sanitizeCues(newCues),
+    }));
+  }, [setState]);
+
+  const handleApplyCopilotScript = useCallback((newScript: string) => {
+    handleSaveScript(newScript, true);
+  }, [handleSaveScript]);
+
   const handleOpenRawCuesModal = useCallback(() => {
     setRawCuesText(JSON.stringify(state.cues, null, 2));
     setIsCuesModalOpen(true);
@@ -857,6 +871,8 @@ export default function App() {
         setMode={setMode}
         isLibraryOpen={isLibraryOpen}
         setIsLibraryOpen={setIsLibraryOpen}
+        isCopilotOpen={isCopilotOpen}
+        onToggleCopilot={() => setIsCopilotOpen(prev => !prev)}
         onNewProject={handleNewProject}
         onOpenGuide={handleOpenGuide}
         isColorModalOpen={isColorModalOpen}
@@ -1041,6 +1057,18 @@ export default function App() {
             />
           </>
         )}
+
+        {/* AI Director Copilot Panel */}
+        <CopilotPanel
+          isOpen={isCopilotOpen}
+          onClose={() => setIsCopilotOpen(false)}
+          scriptText={state.scriptText || ''}
+          videoDuration={duration}
+          videoName={state.localVideoName}
+          cues={state.cues || []}
+          onApplyCues={handleApplyCopilotCues}
+          onApplyScript={handleApplyCopilotScript}
+        />
       </main>
     </CueEditorProvider>
 

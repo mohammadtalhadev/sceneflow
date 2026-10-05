@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, memo } from 'react';
 import { 
   Book, 
   Coffee, 
-  Info 
+  Info,
+  Sparkles
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { UI_TOKENS } from '../styles/tokens/ui';
@@ -23,6 +24,8 @@ export interface AppHeaderProps {
   setMode: (mode: 'playback' | 'edit') => void;
   isLibraryOpen: boolean;
   setIsLibraryOpen: (open: boolean) => void;
+  isCopilotOpen?: boolean;
+  onToggleCopilot?: () => void;
   onNewProject?: () => void;
   onOpenGuide?: () => void;
   isColorModalOpen: boolean;
@@ -62,6 +65,8 @@ export const AppHeader: React.FC<AppHeaderProps> = memo(({
   setMode,
   isLibraryOpen,
   setIsLibraryOpen,
+  isCopilotOpen = false,
+  onToggleCopilot,
   onNewProject,
   onOpenGuide,
   isColorModalOpen,
@@ -203,6 +208,24 @@ export const AppHeader: React.FC<AppHeaderProps> = memo(({
           <Coffee size={12} />
           <span>Tip</span>
         </a>
+
+        {/* AI Director Copilot Button */}
+        {onToggleCopilot && (
+          <button
+            type="button"
+            onClick={onToggleCopilot}
+            title={isCopilotOpen ? "Close AI Director Copilot" : "Open AI Director Copilot (Shift+A)"}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-150 border select-none active:scale-95 shrink-0",
+              isCopilotOpen
+                ? "bg-purple-500/20 border-purple-500/50 text-purple-600 dark:text-purple-300 shadow-sm shadow-purple-500/20"
+                : "bg-surface hover:bg-surface-subtle border-border-subtle hover:border-purple-500/40 text-text-muted hover:text-text-main"
+            )}
+          >
+            <Sparkles size={12} className={cn("shrink-0", isCopilotOpen ? "text-purple-500 animate-pulse" : "text-purple-400")} />
+            <span>Copilot</span>
+          </button>
+        )}
 
         {/* Studio Preferences Dropdown Menu */}
         <SettingsMenuDropdown

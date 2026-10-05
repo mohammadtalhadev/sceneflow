@@ -13,6 +13,7 @@ interface UseKeyboardShortcutsOptions {
   onOpenRawScript?: () => void;
   onOpenRawCues?: () => void;
   onOpenLibrary?: () => void;
+  onToggleCopilot?: () => void;
   disabled?: boolean;
 }
 
@@ -29,6 +30,7 @@ export function useKeyboardShortcuts({
   onOpenRawScript,
   onOpenRawCues,
   onOpenLibrary,
+  onToggleCopilot,
   disabled = false,
 }: UseKeyboardShortcutsOptions) {
   const [isDesktop, setIsDesktop] = useState(
@@ -108,6 +110,20 @@ export function useKeyboardShortcuts({
           onOpenLibrary();
           return;
         }
+        if ((e.code === 'KeyA' || e.key.toLowerCase() === 'a') && onToggleCopilot) {
+          e.preventDefault();
+          onToggleCopilot();
+          return;
+        }
+      }
+
+      // Ctrl+I or Cmd+I to toggle AI Copilot
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+        if ((e.code === 'KeyI' || e.key.toLowerCase() === 'i') && onToggleCopilot) {
+          e.preventDefault();
+          onToggleCopilot();
+          return;
+        }
       }
 
       // Classic Alt+F to toggle file menu
@@ -162,7 +178,8 @@ export function useKeyboardShortcuts({
     onToggleFileMenu,
     onOpenRawScript,
     onOpenRawCues,
-    onOpenLibrary
+    onOpenLibrary,
+    onToggleCopilot,
   ]);
 
   return { isDesktop };
